@@ -47,13 +47,14 @@ The name summary reports `requested`, `checked`, `registered`, `notFound`,
 
 ## Requirements
 
-- Node.js 20+ (developed on v24)
+- Node.js 24.x (declared via `engines.node` and `.nvmrc`; v24 is required by
+  the Vitest 5 toolchain). CI/Vercel picks this up automatically.
 - npm
 
 ## Setup
 
 ```bash
-npm install --legacy-peer-deps
+npm ci
 cp .env.example .env
 
 npx prisma migrate deploy
@@ -63,6 +64,10 @@ npm run dev
 ```
 
 Open http://127.0.0.1:3000
+
+> The dependency tree resolves cleanly under a strict `npm install` / `npm ci`
+> (no `--legacy-peer-deps` or `--force` needed). `@types/node` is pinned to the
+> Node 24 line so it satisfies the peer requirements of both `vitest` and `vite`.
 
 ## Scripts
 
