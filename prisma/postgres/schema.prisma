@@ -1,0 +1,566 @@
+// Domain Radar — evidence-first domain investment research database.
+//
+// DUAL-SCHEMA SETUP (read this before editing)
+// --------------------------------------------
+// This SQLite file is the SINGLE SOURCE OF TRUTH for every model and is used
+// for local development and the local test suite. The PostgreSQL schema that
+// Vercel production uses is GENERATED from this file by `npm run db:sync-schema`
+// (see scripts/sync-prisma-schema.ts) and must differ ONLY in the datasource
+// provider. `tests/schema-parity.test.ts` fails if the two files ever drift.
+//
+// Never hand-edit prisma/postgres/schema.prisma — edit this file, then run
+// `npm run db:sync-schema`. Enum-like fields are stored as strings and validated
+// with Zod in the application layer. See src/lib/enums.ts for canonical values.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Governance: sources & TLD registry
+// ---------------------------------------------------------------------------
+
+/// A permitted external data provider. Never represent a planned adapter as
+/// operational: `status` reflects reality (AVAILABLE, MANUAL_ONLY, DISABLED,
+/// RATE_LIMITED, NEEDS_CONFIGURATION).
+model Source {
+  id                 String   @id @default(cuid())
+  key                String   @unique // stable slug, e.g. "rdap_register_si"
+  name               String
+  kind               String // RDAP | API | RSS | MANUAL | DATASET | PORTAL
+  status             String // see enums.SourceStatus
+  termsUrl           String?
+  permittedUseNotes  String?
+  attributionRequired Boolean @default(false)
+  attributionText    String?
+  requiresAuth       Boolean  @default(false)
+  rateLimitPerMinute Int? // null = unknown/unlimited (enforce conservative default)
+  cacheTtlSeconds    Int      @default(86400)
+  timeoutMs          Int      @default(10000)
+  maxRetries         Int      @default(2)
+  lastSuccessAt      DateTime?
+  lastCheckedAt      DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  availabilityChecks AvailabilityCheck[]
+  variantChecks      DomainVariantCheck[]
+  evidence           EvidenceRecord[]
+  marketStats        AggregateMarketStatistic[]
+  trendObservations  TrendObservation[]
+  newsArticles       NewsArticle[]
+  companyProspects   CompanyProspect[]
+  trademarkReviews   TrademarkReview[]
+  scheduledJobRuns   ScheduledJobRun[]
+
+  @@index([status])
+}
+
+/// Configurable registry of extensions and their real lookup capability.
+/// rdapBaseUrl is null when no verified RDAP endpoint exists — such TLDs are
+/// explicitly UNSUPPORTED rather than silently omitted.
+model TldRegistry {
+  id             String   @id @default(cuid())
+  tld            String   @unique // normalized, leading dot, lowercase: ".si"
+  displayName    String
+  rdapBaseUrl    String? // verified RDAP base, null when unsupported
+  bootstrapUrl   String? // IANA bootstrap file this came from
+  status         String // see enums.TldStatus: AVAILABLE | UNSUPPORTED | NEEDS_VERIFICATION | DISABLED
+  supportsHead   Boolean  @default(true)
+  isDefault      Boolean  @default(false)
+  priority       Int      @default(100) // lower = checked first
+  registryName   String?
+  termsUrl       String?
+  verifiedAt     DateTime? // when RDAP capability was last confirmed
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  candidates    DomainCandidate[]
+  variantChecks DomainVariantCheck[]
+
+  @@index([status])
+  @@index([isDefault])
+}
+
+// ---------------------------------------------------------------------------
+// Search sessions & multi-TLD variant observations
+// ---------------------------------------------------------------------------
+
+/// One user-initiated multi-TLD search for a single name (e.g. "AgentCapability").
+/// Records what was requested and how each extension resolved, including
+/// unsupported/unresolved extensions that were explicitly NOT checked.
+model DomainSearchSession {
+  id              String   @id @default(cuid())
+  rawQuery        String // exactly what the user typed
+  normalizedSld   String // normalized second-level label, e.g. "agentcapability"
+  requestedTlds   String // JSON array of requested TLD strings (order preserved)
+  requestedCount  Int
+  checkedCount    Int      @default(0)
+  registeredCount Int      @default(0)
+  notFoundCount   Int      @default(0)
+  unsupportedCount Int     @default(0)
+  unresolvedCount Int      @default(0)
+  errorCount      Int      @default(0)
+  status          String   @default("PENDING") // see enums.SessionStatus
+  notes           String?
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  variantChecks DomainVariantCheck[]
+
+  @@index([normalizedSld])
+  @@index([status])
+}
+
+/// Append-only historical observation of one (sld, tld) lookup. A 404 or
+/// missing record is never equivalent to a guarantee of registrability; the
+/// normalized status carries UNKNOWN when evidence is insufficient.
+model DomainVariantCheck {
+  id               String   @id @default(cuid())
+  sessionId        String?
+  session          DomainSearchSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  candidateId      String?
+  candidate        DomainCandidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  sourceId         String
+  source           Source   @relation(fields: [sourceId], references: [id])
+  tldId            String
+  tld              TldRegistry @relation(fields: [tldId], references: [id])
+  fqdn             String // normalized full domain, e.g. "agentcapability.com"
+  providerHost     String? // RDAP provider hostname the query was sent to
+  requestUrl       String? // exact https URL requested (audit; no secrets)
+  httpStatus       Int?
+  rawStatus        String? // verbatim provider status/error text (bounded)
+  normalizedStatus String // see enums.AvailabilityStatus
+  errorKind        String? // see enums.ErrorKind
+  errorDetails     String?
+  responseMs       Int?
+  isFresh          Boolean  @default(false)
+  checkedAt        DateTime @default(now())
+
+  @@index([fqdn, checkedAt])
+  @@index([candidateId, tldId])
+  @@index([normalizedStatus])
+}
+
+// ---------------------------------------------------------------------------
+// Candidates & availability
+// ---------------------------------------------------------------------------
+
+model DomainCandidate {
+  id             String   @id @default(cuid())
+  fqdn           String   @unique // normalized, e.g. "agentcapability.si"
+  sld            String
+  tld            String // denormalized for fast filtering, mirrors TldRegistry.tld
+  tldId          String
+  tldRef         TldRegistry @relation(fields: [tldId], references: [id])
+  status         String   @default("CANDIDATE") // see enums.CandidateStatus
+  generationRule String? // how this candidate was produced
+  seedTerms      String? // JSON array of seed terms / source word list
+  score          Int? // last computed composite score (nullable; never faked)
+  notes          String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  availabilityChecks AvailabilityCheck[]
+  variantChecks      DomainVariantCheck[]
+  observations       DomainObservation[]
+  evidence           EvidenceRecord[]
+  assessments        InvestmentAssessment[]
+  holdings           PortfolioHolding[]
+  alerts             Alert[]
+
+  @@index([sld])
+  @@index([tldId])
+  @@index([status])
+}
+
+/// Durable, most-recent availability state per (candidate, source). Distinct
+/// from the append-only DomainVariantCheck history.
+model AvailabilityCheck {
+  id               String   @id @default(cuid())
+  candidateId      String
+  candidate        DomainCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  sourceId         String
+  source           Source   @relation(fields: [sourceId], references: [id])
+  tld              String
+  fqdn             String
+  httpStatus       Int?
+  rawStatus        String?
+  normalizedStatus String // see enums.AvailabilityStatus
+  errorKind        String?
+  errorDetails     String?
+  responseMs       Int?
+  checkedAt        DateTime @default(now())
+  expiresAt        DateTime? // freshness window; expired => must re-check before decision
+  isFresh          Boolean  @default(true)
+
+  @@unique([candidateId, sourceId])
+  @@index([normalizedStatus])
+  @@index([checkedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Evidence & observations
+// ---------------------------------------------------------------------------
+
+/// Append-only observation stream (availability, website presence, listings,
+/// market stats, news). A missing observation is not proof of a change.
+model DomainObservation {
+  id            String   @id @default(cuid())
+  candidateId   String
+  candidate     DomainCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  kind          String // see enums.ObservationKind
+  observedAt    DateTime @default(now())
+  valueText     String?
+  valueNumeric  Float?
+  valueBool     Boolean?
+  sourceLabel   String? // human/source reference
+  sourceUrl     String?
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@index([candidateId, kind, observedAt])
+}
+
+/// Every external factual claim carries source, observation date, retrieval
+/// status and evidence type. Reliability/confidence are stored separately from
+/// investment attractiveness.
+model EvidenceRecord {
+  id            String   @id @default(cuid())
+  candidateId   String?
+  candidate     DomainCandidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  sourceId      String?
+  source        Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  subjectType   String // CANDIDATE | COMPANY | TRADEMARK | SALE | STAT | NEWS
+  subjectId     String?
+  evidenceType  String // see enums.EvidenceType (DIRECT_OBSERVATION, THIRD_PARTY_REPORT, ESTIMATE, USER_NOTE)
+  reliability   String   @default("UNKNOWN") // see enums.Reliability
+  confidence    Int? // 0-100, null when unknown
+  url           String?
+  summary       String
+  observedAt    DateTime @default(now())
+  retrievedAt   DateTime @default(now())
+  retrievalStatus String @default("OK") // OK | PARTIAL | FAILED | STALE
+  rawPayloadRef String? // reference/retention handle, not unbounded blobs
+  createdAt     DateTime @default(now())
+
+  @@index([candidateId])
+  @@index([subjectType, subjectId])
+  @@index([evidenceType])
+}
+
+// ---------------------------------------------------------------------------
+// Sales intelligence
+// ---------------------------------------------------------------------------
+
+/// Individual sales: manual entry or CSV import. Never presented as verified
+/// unless verificationStatus says so.
+model SaleComparable {
+  id                 String   @id @default(cuid())
+  domain             String
+  sld                String
+  tld                String
+  price              Float
+  currency           String   @default("USD")
+  priceUsd           Float?
+  fxRateUsed         Float?
+  fxCapturedAt       DateTime?
+  saleDate           DateTime?
+  venue              String? // marketplace / registrar / private
+  saleType           String? // RETAIL | WHOLESALE | AUCTION | PRIVATE | UNKNOWN
+  sourceUrl          String?
+  sourceLabel        String?
+  verificationStatus String   @default("REPORTED") // see enums.VerificationStatus
+  notes              String?
+  importJobId        String?
+  importJob          ImportJob? @relation(fields: [importJobId], references: [id], onDelete: SetNull)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([sld])
+  @@index([tld])
+  @@index([saleDate])
+  @@index([verificationStatus])
+}
+
+/// Precomputed aggregate market statistics (NameBio RetailStats / TLDStats and
+/// future providers). Always attributed, always timestamped.
+model AggregateMarketStatistic {
+  id           String   @id @default(cuid())
+  sourceId     String
+  source       Source   @relation(fields: [sourceId], references: [id])
+  scope        String // KEYWORD | TLD
+  key          String // keyword or ".si"
+  placement    String? // exact | start | end | middle (keyword scope)
+  period       String? // all | 1y | 3m ... (tld scope)
+  saleCount    Int?
+  priceSum     Float?
+  priceAvg     Float?
+  priceMax     Float?
+  priceStddev  Float?
+  currency     String   @default("USD")
+  attribution  String
+  retrievedAt  DateTime @default(now())
+  sourceUrl    String?
+
+  @@unique([sourceId, scope, key, placement, period])
+  @@index([scope, key])
+}
+
+// ---------------------------------------------------------------------------
+// Trends & news
+// ---------------------------------------------------------------------------
+
+model TrendObservation {
+  id           String   @id @default(cuid())
+  sourceId     String?
+  source       Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  subject      String // keyword / brand / sector being tracked
+  sector       String?
+  metric       String // e.g. "google_trends_interest"
+  valueNumeric Float?
+  region       String?
+  observedAt   DateTime // date the trend refers to
+  granularity  String? // DAY | WEEK | MONTH
+  isManual     Boolean  @default(false)
+  sourceUrl    String?
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  @@index([subject, observedAt])
+}
+
+model NewsArticle {
+  id             String   @id @default(cuid())
+  sourceId       String?
+  source         Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  title          String
+  url            String
+  dedupeHash     String   @unique
+  publisher      String?
+  publishedAt    DateTime?
+  snippet        String?
+  sector         String?
+  product        String?
+  technology     String?
+  buyerType      String?
+  useCase        String?
+  investorNote   String? // short explanation of why it may matter to investors
+  isManual       Boolean  @default(false)
+  retrievedAt    DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  @@index([publishedAt])
+  @@index([sector])
+}
+
+// ---------------------------------------------------------------------------
+// Buyers & trademarks
+// ---------------------------------------------------------------------------
+
+model CompanyProspect {
+  id             String   @id @default(cuid())
+  name           String
+  website        String?
+  sector         String?
+  product        String?
+  geography      String?
+  rationale      String // specific acquisition rationale for the exact domain
+  standing       String   @default("PROSPECT") // VERIFIED_COMPANY | PROSPECT | EXPRESSED_INTEREST
+  sourceId       String?
+  source         Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  sourceUrl      String?
+  evidenceDate   DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([sector])
+}
+
+/// Manual preliminary trademark review. Missing review is UNKNOWN, never GREEN.
+model TrademarkReview {
+  id             String   @id @default(cuid())
+  candidateId    String?
+  term           String
+  variant        String? // exact | plural | phonetic | stylized
+  jurisdiction   String?
+  classes        String? // Nice classes, comma separated
+  status         String // see enums.TrademarkStatus
+  riskLevel      String   @default("UNKNOWN") // see enums.RiskLevel
+  sourceId       String?
+  source         Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  sourceUrl      String?
+  reviewedAt     DateTime?
+  reviewerNotes  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([term])
+  @@index([riskLevel])
+}
+
+// ---------------------------------------------------------------------------
+// Assessment & valuation
+// ---------------------------------------------------------------------------
+
+/// Immutable-ish assessment snapshots; overrides create a new row referencing
+/// the prior one (parentAssessmentId) so history is preserved.
+model InvestmentAssessment {
+  id                 String   @id @default(cuid())
+  candidateId        String
+  candidate          DomainCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  modelVersion       String
+  dimensionScores    String // JSON: per-dimension {raw, weight, contribution}
+  totalScore         Float?
+  evidenceCoverage   Int? // 0-100
+  confidence         Int? // 0-100, null when unknown
+  availabilityFresh  Boolean  @default(false)
+  trademarkGate      String   @default("UNKNOWN") // see enums.TrademarkGate
+  decision           String // see enums.Decision
+  reasons            String // JSON array of {code, text, polarity}
+  valuation          String? // JSON: scenario/EV with formulas & assumptions
+  isOverride         Boolean  @default(false)
+  overrideBy         String?
+  overrideAt         DateTime?
+  overrideReason     String?
+  parentAssessmentId String?
+  createdAt          DateTime @default(now())
+
+  @@index([candidateId, createdAt])
+  @@index([decision])
+}
+
+// ---------------------------------------------------------------------------
+// Portfolio & listing
+// ---------------------------------------------------------------------------
+
+model PortfolioHolding {
+  id                String   @id @default(cuid())
+  candidateId       String?
+  candidate         DomainCandidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  domain            String
+  tld               String
+  acquisitionDate   DateTime?
+  registrationCost  Float?
+  registrationCurrency String @default("USD")
+  renewalDate       DateTime?
+  renewalCost       Float?
+  registrar         String?
+  targetAskPrice    Float?
+  askCurrency       String   @default("USD")
+  status            String   @default("HELD") // see enums.HoldingStatus
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  listings ListingRecord[]
+
+  @@index([domain])
+  @@index([status])
+}
+
+model ListingRecord {
+  id            String   @id @default(cuid())
+  holdingId     String
+  holding       PortfolioHolding @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  venue         String
+  listingUrl    String?
+  askPrice      Float?
+  currency      String   @default("USD")
+  listedAt      DateTime?
+  delistedAt    DateTime?
+  status        String   @default("LISTED") // LISTED | DELISTED | SOLD | UNKNOWN
+  salePrice     Float?
+  saleCurrency  String?
+  soldAt        DateTime?
+  commissionPct Float?
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@index([holdingId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Alerts, experiments, jobs, settings
+// ---------------------------------------------------------------------------
+
+model Alert {
+  id          String   @id @default(cuid())
+  candidateId String?
+  candidate   DomainCandidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  kind        String // RENEWAL_DUE | AVAILABILITY_CHANGE | LISTING_CHANGE | NEWS | SOURCE_STALE
+  severity    String   @default("INFO") // INFO | WARNING | CRITICAL
+  title       String
+  detail      String?
+  isRead      Boolean  @default(false)
+  dueAt       DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([isRead, createdAt])
+}
+
+model ResearchExperiment {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  config       String // JSON: generation rule, filters, model version
+  modelVersion String?
+  status       String   @default("DRAFT") // DRAFT | RUNNING | COMPLETED
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model ImportJob {
+  id            String   @id @default(cuid())
+  kind          String // CANDIDATES_CSV | SALES_CSV | TRENDS_CSV
+  filename      String?
+  totalRows     Int      @default(0)
+  importedRows  Int      @default(0)
+  skippedRows   Int      @default(0)
+  errorRows     Int      @default(0)
+  status        String   @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED
+  errors        String? // JSON array of {row, reason}
+  startedAt     DateTime @default(now())
+  finishedAt    DateTime?
+  createdAt     DateTime @default(now())
+
+  saleComparables SaleComparable[]
+}
+
+model ScheduledJobRun {
+  id            String   @id @default(cuid())
+  jobKey        String // e.g. "availability_refresh", "rss_ingest"
+  sourceId      String?
+  source        Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  status        String   @default("RUNNING") // RUNNING | SUCCESS | FAILED | CANCELLED
+  startedAt     DateTime @default(now())
+  finishedAt    DateTime?
+  itemsProcessed Int     @default(0)
+  errorDetails  String?
+  isDryRun      Boolean  @default(false)
+
+  @@index([jobKey, startedAt])
+}
+
+/// Single-row settings table (enforced by app). Stores JSON blobs for lists so
+/// no schema change is needed to add extensions or defaults.
+model UserSettings {
+  id                  String   @id @default("singleton")
+  defaultTlds         String // JSON array, e.g. [".com",".ai",".si"]
+  requestBudgetPerRun Int      @default(200)
+  maxConcurrency      Int      @default(2)
+  requestDelayMs      Int      @default(1000)
+  fxRateSource        String   @default("manual")
+  theme               String   @default("dark")
+  investorNotes       String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}

@@ -3,31 +3,43 @@ import { execSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
 import { existsSync, rmSync } from "node:fs";
 import path from "node:path";
+import { getGeneratedProvider } from "./helpers/prisma-provider";
 
-// Database integration test. Uses a dedicated SQLite file so the dev database is
-// never touched. Applies migrations via `prisma migrate deploy`.
+// SQLite database integration test for LOCAL development. Uses a dedicated file
+// so the dev database is never touched, and applies migrations via
+// `prisma migrate deploy`. Gates on the generated client so it only runs when the
+// SQLite client is generated (`npm test`); the PostgreSQL equivalent lives in
+// tests/db.postgres.test.ts and runs under `npm run test:postgres`.
 
 const TEST_DB_REL = "data/test-domain-radar.db";
 const TEST_DB_ABS = path.resolve(process.cwd(), TEST_DB_REL);
 const TEST_URL = `file:../${TEST_DB_REL.replace(/\\/g, "/")}`;
 
+const provider = getGeneratedProvider();
+if (provider !== "sqlite") {
+  console.warn(
+    `[db.test] skipped: generated Prisma client is "${provider}", expected "sqlite". ` +
+      "Run `npm test` (regenerates the SQLite client) or see tests/db.postgres.test.ts.",
+  );
+}
+
 let prisma: PrismaClient;
 
-beforeAll(() => {
-  if (existsSync(TEST_DB_ABS)) rmSync(TEST_DB_ABS, { force: true });
-  execSync("npx prisma migrate deploy", {
-    stdio: "pipe",
-    env: { ...process.env, DATABASE_URL: TEST_URL },
+describe.skipIf(provider !== "sqlite")("database migrations & constraints (SQLite)", () => {
+  beforeAll(() => {
+    if (existsSync(TEST_DB_ABS)) rmSync(TEST_DB_ABS, { force: true });
+    execSync("npx prisma migrate deploy --schema=prisma/schema.prisma", {
+      stdio: "pipe",
+      env: { ...process.env, DATABASE_URL: TEST_URL },
+    });
+    prisma = new PrismaClient({ datasources: { db: { url: TEST_URL } } });
   });
-  prisma = new PrismaClient({ datasources: { db: { url: TEST_URL } } });
-});
 
-afterAll(async () => {
-  await prisma.$disconnect();
-  if (existsSync(TEST_DB_ABS)) rmSync(TEST_DB_ABS, { force: true });
-});
+  afterAll(async () => {
+    await prisma.$disconnect();
+    if (existsSync(TEST_DB_ABS)) rmSync(TEST_DB_ABS, { force: true });
+  });
 
-describe("database migrations & constraints", () => {
   it("creates the TldRegistry table and enforces unique tld", async () => {
     await prisma.tldRegistry.create({
       data: { tld: ".test", displayName: "Test", status: "AVAILABLE" },

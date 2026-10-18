@@ -1,7 +1,16 @@
-// Domain Radar — evidence-first domain investment research database
-// Provider: SQLite (local-first). Enum-like fields are stored as strings and
-// validated with Zod in the application layer, so the schema ports cleanly to
-// PostgreSQL later. See src/lib/enums.ts for canonical values.
+// Domain Radar — evidence-first domain investment research database.
+//
+// DUAL-SCHEMA SETUP (read this before editing)
+// --------------------------------------------
+// This SQLite file is the SINGLE SOURCE OF TRUTH for every model and is used
+// for local development and the local test suite. The PostgreSQL schema that
+// Vercel production uses is GENERATED from this file by `npm run db:sync-schema`
+// (see scripts/sync-prisma-schema.ts) and must differ ONLY in the datasource
+// provider. `tests/schema-parity.test.ts` fails if the two files ever drift.
+//
+// Never hand-edit prisma/postgres/schema.prisma — edit this file, then run
+// `npm run db:sync-schema`. Enum-like fields are stored as strings and validated
+// with Zod in the application layer. See src/lib/enums.ts for canonical values.
 
 generator client {
   provider = "prisma-client-js"

@@ -58,8 +58,8 @@ The name summary reports `requested`, `checked`, `registered`, `notFound`,
 npm ci
 cp .env.example .env
 
-npx prisma migrate deploy
-npx tsx prisma/seed.ts
+npm run db:deploy:sqlite   # apply SQLite migrations
+npm run db:seed            # seed TLD + source registries
 
 npm run dev
 ```
@@ -101,42 +101,66 @@ Set `DOMAIN_RADAR_ACCESS_MODE=deployment` and `DOMAIN_RADAR_ACCESS_TOKEN=...` in
 the host's environment (e.g. Vercel → Project → Settings → Environment Variables),
 then redeploy.
 
-> **Database caveat.** SQLite cannot persist on serverless hosts like Vercel —
-> the `data/domain-radar.db` file is git-ignored and is not present in a fresh
-> deployment, so pages that read the database will fail even behind the access
-> gate. A real deployment needs a hosted Postgres (and the Prisma datasource
-> switched to `postgresql`). Do not enable deployment mode on a public host until
-> that is set up.
+### Dual database — SQLite local · PostgreSQL production
 
-**Deployment status: paused — the project runs local-only.** The deployment-mode
-code and tests are kept so a future deploy is a configuration change, not a
-rewrite, but deployment is intentionally **not** enabled and the app has **not**
-migrated off SQLite. Nothing in the current configuration weakens the local-only
-guard: local mode is the default, `.env` does not set `DOMAIN_RADAR_ACCESS_MODE`,
-and there is no `vercel.json`/`.npmrc` that alters it.
+SQLite cannot persist on serverless hosts like Vercel, so production uses
+PostgreSQL. Prisma fixes the datasource provider per schema file, so the project
+keeps two:
 
-**Future PostgreSQL migration.** Keep it minimal: switch the `datasource`
-`provider` in `prisma/schema.prisma` to `postgresql`, point `DATABASE_URL` at the
-hosted instance, run `npx prisma migrate deploy`, and seed. All database access
-already goes through Prisma and the repositories in `src/lib`, so no new
-abstractions are needed.
+| File | Provider | Used by |
+| --- | --- | --- |
+| `prisma/schema.prisma` | SQLite | local dev, `npm test` |
+| `prisma/postgres/schema.prisma` | PostgreSQL | Vercel production, `npm run test:postgres` |
+
+`prisma/schema.prisma` is the **single source of truth** for every model.
+`prisma/postgres/schema.prisma` is **generated** from it by `npm run db:sync-schema`
+and must differ *only* in the datasource provider; `tests/schema-parity.test.ts`
+fails the build if the two ever drift. Never hand-edit the generated file.
+
+Regression is guarded: `scripts/select-prisma-provider.ts` generates the Prisma
+client that matches the effective `DATABASE_URL` (via `npm run dev`, `npm run build`,
+`npm test`), and the SQLite/PostgreSQL integration tests in `tests/` each gate on
+the provider that is actually generated — neither run is silently dropped.
+
+```bash
+npm run db:sync-schema      # regenerate prisma/postgres/schema.prisma after editing prisma/schema.prisma
+npm run db:deploy:sqlite    # local SQLite migrations (== `prisma migrate deploy`)
+npm run db:migrate          # local dev migrations (SQLite)
+npm run db:deploy           # production PostgreSQL migrations (needs production DATABASE_URL)
+npm run db:seed             # seed TLD + source registries (matches the generated client)
+```
+
+`npm run test:postgres` runs the whole suite with the PostgreSQL client generated.
+If `TEST_DATABASE_URL` is set it points the PostgreSQL test at that server; the
+test always forces its own `domain_radar_test` schema, so production data is never
+touched — the test creates and cleans up its own rows there.
+
+**Deployment status.** The app is deployed, backed by the connected PostgreSQL
+database, but remains **local-only by default**: `DOMAIN_RADAR_ACCESS_MODE` is
+unset, so the public URL returns `403 Forbidden: Domain Radar is local-only.`
+Enabling remote access stays a deliberate, token-gated configuration change (see
+above). Nothing in the current configuration weakens the local-only guard.
 
 ## Scripts
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Dev server on `127.0.0.1:3000` |
+| `npm run dev` | Dev server on `127.0.0.1:3000` (generates the matching Prisma client first) |
 | `npm run build` | Production build (uses webpack — see note) |
 | `npm run start` | Production server on `127.0.0.1:3000` |
-| `npm test` | Vitest unit suite |
-| `npx tsx tests/live/rdap-smoke.ts` | Live RDAP smoke test (real network, low volume) |
+| `npm test` | Vitest suite with the SQLite client (runs `tests/db.test.ts`) |
+| `npm run test:postgres` | Vitest suite with the PostgreSQL client (runs `tests/db.postgres.test.ts`) |
 | `npm run lint` | ESLint |
-| `npx tsc --noEmit` | Type check |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run db:sync-schema` | Regenerate the PostgreSQL Prisma schema from the canonical SQLite schema |
+| `npm run db:generate` | Generate the Prisma client for the effective `DATABASE_URL` |
+| `npm run db:deploy` / `db:deploy:sqlite` | Apply PostgreSQL / SQLite migrations |
+| `npm run db:seed` | Seed TLD + source registries |
+| `npx tsx tests/live/rdap-smoke.ts` | Live RDAP smoke test (real network, low volume) |
 
 The live smoke test is **not** part of the unit run (`tests/live` is excluded by
 `vitest.config.mts`). It performs a handful of real, rate-limited requests
 against public registry endpoints and writes nothing to the database.
-| `npx tsx prisma/seed.ts` | Seed TLD + source registries |
 
 ### Build note (Windows)
 

@@ -6,17 +6,23 @@
     "node": "24.x"
   },
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1",
-    "build": "next build --webpack",
+    "dev": "tsx scripts/select-prisma-provider.ts && next dev --hostname 127.0.0.1",
+    "build": "tsx scripts/select-prisma-provider.ts && next build --webpack",
     "start": "next start --hostname 127.0.0.1",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "tsx scripts/select-prisma-provider.ts && vitest run",
     "test:watch": "vitest",
-    "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
+    "test:postgres": "prisma generate --schema=prisma/postgres/schema.prisma && vitest run",
+    "db:sync-schema": "tsx scripts/sync-prisma-schema.ts",
+    "db:generate": "tsx scripts/select-prisma-provider.ts",
+    "db:generate:sqlite": "prisma generate --schema=prisma/schema.prisma",
+    "db:generate:postgres": "prisma generate --schema=prisma/postgres/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema=prisma/schema.prisma",
+    "db:deploy": "prisma migrate deploy --schema=prisma/postgres/schema.prisma",
+    "db:deploy:sqlite": "prisma migrate deploy --schema=prisma/schema.prisma",
     "db:seed": "tsx prisma/seed.ts",
-    "db:reset": "prisma migrate reset --force"
+    "db:reset": "prisma migrate reset --force --schema=prisma/schema.prisma"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
