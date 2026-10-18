@@ -82,18 +82,29 @@ controlled by environment variables:
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `DOMAIN_RADAR_ACCESS_MODE` | `local` | `local` or `deployment`. Any other value is treated as `local`. |
-| `DOMAIN_RADAR_ACCESS_TOKEN` | — | Shared access token (HTTP Basic auth password). **Required** in deployment mode. |
-| `DOMAIN_RADAR_ACCESS_USER` | `domain-radar` | HTTP Basic auth username in deployment mode. |
+| `DOMAIN_RADAR_ACCESS_TOKEN` | — | Shared secret. **Required** in deployment mode; used as the login password and as the session-cookie signing key. |
+| `DOMAIN_RADAR_ACCESS_USER` | `domain-radar` | HTTP Basic auth username (API/CLI clients only). |
 
 Deployment mode rules:
 
 - The `Host` header is **never** used as the access boundary — it is trivial to
-  spoof. Every request must present the token via HTTP Basic auth
-  (constant-time compared), or it gets `401` with a `WWW-Authenticate` challenge.
-- If deployment mode is on but `DOMAIN_RADAR_ACCESS_TOKEN` is unset, the app
-  **fails closed** with `503` instead of serving anything unauthenticated.
-- Local mode ignores the token entirely: supplying credentials never bypasses the
-  loopback guard.
+  spoof.
+- Anonymous page visits are redirected to `/login` with **no** `WWW-Authenticate`
+  header, so the browser shows no Basic-auth prompt. `/login` sets a signed,
+  HttpOnly session cookie (`HMAC-SHA256` keyed by the token) on the correct
+  password; afterwards the cookie is sent automatically on every navigation and
+  fetch, so the password is entered once per browser.
+- Every page **and** every `/api/*` route still requires that session (or HTTP
+  Basic credentials, for scripts). Unauthenticated `/api/*` requests get a plain
+  `401`.
+- Only `/login`, `/api/auth/login`, `/api/auth/logout` and Next's static assets
+  are reachable without a session — none of them expose application data, the
+  database, or the RDAP scanning endpoint.
+- If deployment mode is on but `DOMAIN_RADAR_ACCESS_TOKEN` is unset, protected
+  paths **fail closed** with `503`; the login page still loads so it can report the
+  misconfiguration.
+- Local mode is unchanged: loopback-only, and neither a session cookie nor
+  credentials can bypass the guard.
 - Generate a token with `openssl rand -base64 32` and set it as a Vercel project
   environment variable. Never commit it.
 
@@ -135,11 +146,11 @@ If `TEST_DATABASE_URL` is set it points the PostgreSQL test at that server; the
 test always forces its own `domain_radar_test` schema, so production data is never
 touched — the test creates and cleans up its own rows there.
 
-**Deployment status.** The app is deployed, backed by the connected PostgreSQL
-database, but remains **local-only by default**: `DOMAIN_RADAR_ACCESS_MODE` is
-unset, so the public URL returns `403 Forbidden: Domain Radar is local-only.`
-Enabling remote access stays a deliberate, token-gated configuration change (see
-above). Nothing in the current configuration weakens the local-only guard.
+**Deployment status.** The app is deployed and runs in **deployment mode** behind
+a login: every page and API requires a session, anonymous visitors are redirected
+to `/login` (no browser Basic-auth prompt), and nothing is publicly readable.
+Local development stays loopback-only by default. The database credentials and the
+access token are never sent to the client.
 
 ## Scripts
 

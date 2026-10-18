@@ -5,6 +5,7 @@ import {
   getAccessMode,
   getUsername,
   hostnameFromHeader,
+  isAuthExemptPath,
   parseBasicAuth,
   timingSafeEqualStrings,
 } from "@/lib/access-control";
@@ -226,5 +227,98 @@ describe("decideAccess — deployment mode", () => {
       authorizationHeader: basic("owner", TOKEN),
     });
     expect(decision).toEqual({ ok: true });
+  });
+});
+
+describe("isAuthExemptPath", () => {
+  it("exempts the login page, auth endpoints and Next assets", () => {
+    expect(isAuthExemptPath("/login")).toBe(true);
+    expect(isAuthExemptPath("/api/auth/login")).toBe(true);
+    expect(isAuthExemptPath("/api/auth/logout")).toBe(true);
+    expect(isAuthExemptPath("/_next/static/chunks/main.js")).toBe(true);
+    expect(isAuthExemptPath("/favicon.ico")).toBe(true);
+  });
+
+  it("does not exempt app pages or protected APIs", () => {
+    for (const path of [
+      "/",
+      "/sources",
+      "/candidates",
+      "/api/candidates",
+      "/api/candidates/export",
+      "/api/search",
+      "/api/sources",
+      "/api/tlds",
+      "/api/settings",
+    ]) {
+      expect(isAuthExemptPath(path)).toBe(false);
+    }
+  });
+});
+
+describe("decideAccess — deployment mode with sessions", () => {
+  function assess(extra: {
+    pathname?: string;
+    sessionValid?: boolean;
+    token?: string | undefined;
+  }) {
+    return decideAccess({
+      mode: "deployment",
+      hostHeader: "domain-radar.vercel.app",
+      authorizationHeader: null,
+      token: TOKEN,
+      username: USER,
+      ...extra,
+    });
+  }
+
+  it("allows the login page and auth endpoints without a session", () => {
+    expect(assess({ pathname: "/login" })).toEqual({ ok: true });
+    expect(assess({ pathname: "/api/auth/login" })).toEqual({ ok: true });
+    expect(assess({ pathname: "/api/auth/logout" })).toEqual({ ok: true });
+  });
+
+  it("allows pages and APIs when the session cookie is valid", () => {
+    expect(assess({ pathname: "/", sessionValid: true })).toEqual({ ok: true });
+    expect(assess({ pathname: "/sources", sessionValid: true })).toEqual({
+      ok: true,
+    });
+    expect(
+      assess({ pathname: "/api/candidates", sessionValid: true }),
+    ).toEqual({ ok: true });
+  });
+
+  it("still challenges protected paths without a session", () => {
+    expect(
+      assess({ pathname: "/api/candidates", sessionValid: false }),
+    ).toMatchObject({ ok: false, status: 401 });
+    expect(assess({ pathname: "/", sessionValid: false })).toMatchObject({
+      ok: false,
+      status: 401,
+    });
+  });
+
+  it("fails closed on protected paths when no token is configured, but keeps login reachable", () => {
+    expect(assess({ token: undefined, pathname: "/api/candidates" })).toMatchObject(
+      { ok: false, status: 503 },
+    );
+    expect(assess({ token: undefined, pathname: "/" })).toMatchObject({
+      ok: false,
+      status: 503,
+    });
+    expect(assess({ token: undefined, pathname: "/login" })).toEqual({ ok: true });
+  });
+
+  it("ignores sessionValid in local mode (loopback guard still wins)", () => {
+    const decision = decideAccess({
+      mode: "local",
+      hostHeader: "evil.example.com",
+      authorizationHeader: null,
+      token: TOKEN,
+      username: USER,
+      sessionValid: true,
+      pathname: "/login",
+    });
+    expect(decision).toMatchObject({ ok: false, status: 403 });
   });
 });

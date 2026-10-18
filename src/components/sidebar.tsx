@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const NAV = [
   { href: "/", label: "Overview" },
@@ -18,6 +18,20 @@ const NAV = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleSignOut() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      router.push("/login");
+      router.refresh();
+    }
+  }
+
+  // The login screen stands alone.
+  if (pathname === "/login") return null;
+
   return (
     <aside className="w-60 shrink-0 hidden md:flex flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
       <div className="px-5 py-5 border-b border-[var(--color-border)]">
@@ -58,7 +72,14 @@ export function Sidebar() {
         })}
       </nav>
       <div className="px-5 py-4 border-t border-[var(--color-border)] text-[11px] text-[var(--color-muted)]">
-        v0.1 · Milestone 1
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="mb-2 text-[11px] text-[var(--color-muted)] hover:text-[var(--color-fg)] underline-offset-2 hover:underline"
+        >
+          Sign out
+        </button>
+        <div>v0.1 · Milestone 1</div>
       </div>
     </aside>
   );

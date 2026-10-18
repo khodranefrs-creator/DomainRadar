@@ -27,6 +27,24 @@ export const DEFAULT_ACCESS_USER = "domain-radar";
 
 export const BASIC_CHALLENGE = 'Basic realm="Domain Radar", charset="UTF-8"';
 
+// Paths a browser must reach WITHOUT a session so it can log in: the login page,
+// the login/logout endpoints, and Next's own static assets (the login page's
+// JS/CSS load before any cookie exists). None of these expose application data
+// or a protected /api route.
+const AUTH_EXEMPT_EXACT = new Set([
+  "/login",
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/favicon.ico",
+]);
+
+export function isAuthExemptPath(pathname: string): boolean {
+  if (!pathname) return false;
+  if (AUTH_EXEMPT_EXACT.has(pathname)) return true;
+  if (pathname.startsWith("/_next/")) return true;
+  return false;
+}
+
 export type AccessDecision =
   | { ok: true }
   | { ok: false; status: number; message: string; challenge?: string };
@@ -110,6 +128,12 @@ export function decideAccess(input: {
   authorizationHeader: string | null;
   token: string | undefined;
   username: string;
+  // Deployment mode only: a request may be admitted by a valid session cookie
+  // (verified by the caller, which owns the async crypto) or by the exempt
+  // login/auth/static paths. Both default to off, so callers that omit them get
+  // the original token-only behaviour.
+  sessionValid?: boolean;
+  pathname?: string;
 }): AccessDecision {
   if (input.mode === "local") {
     const hostname = hostnameFromHeader(input.hostHeader);
@@ -121,8 +145,13 @@ export function decideAccess(input: {
     };
   }
 
-  // Deployment mode. A missing secret must never open the app to the world, so
-  // refuse every request rather than serving it unauthenticated.
+  // Deployment mode: the login page and its assets must load before a cookie
+  // exists, and a verified session cookie is accepted as proof of login.
+  if (isAuthExemptPath(input.pathname ?? "")) return { ok: true };
+  if (input.sessionValid) return { ok: true };
+
+  // A missing secret must never open the app to the world, so refuse every
+  // non-exempt request rather than serving it unauthenticated.
   const token = input.token ?? "";
   if (token.length === 0) {
     return {
