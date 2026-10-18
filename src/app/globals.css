@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0b0e14;
+  --color-surface: #11151f;
+  --color-surface-2: #161b27;
+  --color-border: #232a39;
+  --color-muted: #8b96ab;
+  --color-fg: #e6e9f0;
+  --color-accent: #5b8cff;
+  --color-accent-dim: #2a3550;
+  --color-ok: #3ecf8e;
+  --color-warn: #e0b341;
+  --color-danger: #ff6b6b;
+  --color-unknown: #7d8698;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --color-mono: var(--color-fg);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Thin, unobtrusive scrollbars for dense tables */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a3143;
+  border-radius: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
