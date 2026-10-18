@@ -108,6 +108,19 @@ then redeploy.
 > switched to `postgresql`). Do not enable deployment mode on a public host until
 > that is set up.
 
+**Deployment status: paused — the project runs local-only.** The deployment-mode
+code and tests are kept so a future deploy is a configuration change, not a
+rewrite, but deployment is intentionally **not** enabled and the app has **not**
+migrated off SQLite. Nothing in the current configuration weakens the local-only
+guard: local mode is the default, `.env` does not set `DOMAIN_RADAR_ACCESS_MODE`,
+and there is no `vercel.json`/`.npmrc` that alters it.
+
+**Future PostgreSQL migration.** Keep it minimal: switch the `datasource`
+`provider` in `prisma/schema.prisma` to `postgresql`, point `DATABASE_URL` at the
+hosted instance, run `npx prisma migrate deploy`, and seed. All database access
+already goes through Prisma and the repositories in `src/lib`, so no new
+abstractions are needed.
+
 ## Scripts
 
 | Command | Purpose |
