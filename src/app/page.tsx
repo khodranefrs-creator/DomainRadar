@@ -3,43 +3,59 @@ import { Suspense } from "react";
 import { candidateRepository } from "@/lib/candidate-repository";
 import { tldRepository } from "@/lib/repository";
 import { prisma } from "@/lib/db";
-import { PageHeader, StatCard, Section, EmptyCard } from "@/components/page-shell";
 import { Badge, availabilityTone } from "@/components/badge";
+import { Bar, Empty, Note, Panel } from "@/components/ui";
+import { InvestigateLauncher } from "@/components/investigate-launcher";
 import { TldStatus, SourceStatus } from "@/lib/enums";
 
-export default function DashboardPage() {
+export default function ConsolePage() {
   return (
     <div>
-      <PageHeader
-        eyebrow="Overview"
-        title="Dashboard"
-        description="Evidence-first domain investment research. Every figure is read from the database or a live registry lookup — nothing here is simulated."
-        actions={
-          <Link href="/scanner" className="btn btn-primary">
-            Open Scanner
-          </Link>
-        }
-      />
-      <Suspense fallback={<DashboardSkeleton />}>
-        <DashboardData />
+      <section className="hero-panel mb-8 px-6 py-9 sm:px-9 sm:py-11">
+        <div className="relative z-10 max-w-[62ch]">
+          <div className="eyebrow mb-3">Domain intelligence terminal</div>
+          <h1 className="display">
+            Trace what a domain
+            <br className="hidden sm:block" /> actually is.
+          </h1>
+          <p className="lede mt-4">
+            Live RDAP lookups across every verified extension, a local candidate
+            pipeline, and an evidence trail behind every row. An unverified lookup
+            is never presented as an available domain.
+          </p>
+          <div className="mt-7 max-w-2xl">
+            <InvestigateLauncher />
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            <Link href="/candidates" className="btn btn-ghost btn-sm">
+              Candidate pipeline
+            </Link>
+            <Link href="/sources" className="btn btn-ghost btn-sm">
+              Registry &amp; sources
+            </Link>
+            <span className="hidden items-center gap-2 text-[11.5px] text-[var(--color-ink-3)] sm:flex">
+              <span className="kbd">⌘K</span> command menu
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <Suspense fallback={<ConsoleSkeleton />}>
+        <ConsoleData />
       </Suspense>
     </div>
   );
 }
 
-function DashboardSkeleton() {
+function ConsoleSkeleton() {
   return (
-    <>
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="panel h-[104px] animate-pulse" />
-        ))}
-      </div>
+    <div className="space-y-6">
+      <div className="skeleton h-[92px]" />
       <div className="grid gap-6 lg:grid-cols-5">
-        <div className="panel h-72 animate-pulse lg:col-span-3" />
-        <div className="panel h-72 animate-pulse lg:col-span-2" />
+        <div className="skeleton h-72 lg:col-span-3" />
+        <div className="skeleton h-72 lg:col-span-2" />
       </div>
-    </>
+    </div>
   );
 }
 
@@ -52,15 +68,6 @@ const STATUS_LABEL: Record<string, string> = {
   UNKNOWN: "Unknown",
   UNSUPPORTED: "Unsupported",
   ERROR: "Error",
-};
-
-const TONE_BAR: Record<string, string> = {
-  good: "bg-emerald-400",
-  warn: "bg-amber-400",
-  bad: "bg-red-400",
-  info: "bg-blue-400",
-  neutral: "bg-zinc-400",
-  unknown: "bg-zinc-500",
 };
 
 function formatWhen(date: Date | null): string {
@@ -76,7 +83,7 @@ function formatWhen(date: Date | null): string {
   return date.toISOString().slice(0, 10);
 }
 
-async function DashboardData() {
+async function ConsoleData() {
   const [
     candCounts,
     tldCounts,
@@ -117,197 +124,209 @@ async function DashboardData() {
     .sort((a, b) => b.count - a.count);
   const maxStatus = Math.max(1, ...statusRows.map((r) => r.count));
 
-  const hasData = totalChecks > 0 || candCounts.total > 0;
-
   return (
     <>
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
-          label="Candidates"
-          value={candCounts.total}
-          hint="stored domains"
-        />
-        <StatCard
-          label="Registry checks"
-          value={totalChecks}
-          hint={lastCheck ? `last ${formatWhen(lastCheck.checkedAt)}` : "none yet"}
-          tone="info"
-        />
-        <StatCard
-          label="Extensions online"
-          value={availableTlds}
-          hint={`${unsupportedTlds} explicitly unsupported`}
-          tone="ok"
-        />
-        <StatCard
-          label="Sources online"
-          value={`${operationalSources}/${sources.length}`}
-          hint="AVAILABLE in registry"
-          tone="neutral"
-        />
+      <div className="panel mb-6 overflow-hidden">
+        <div className="grid grid-cols-2 gap-px bg-[var(--color-line)] lg:grid-cols-4">
+          <Signal label="Candidates staged" value={candCounts.total} hint="in the local pipeline" />
+          <Signal
+            label="Registry checks"
+            value={totalChecks}
+            hint={lastCheck ? `latest ${formatWhen(lastCheck.checkedAt)}` : "none recorded"}
+          />
+          <Signal
+            label="Extensions live"
+            value={availableTlds}
+            hint={`${unsupportedTlds} explicitly unsupported`}
+          />
+          <Signal
+            label="Operational sources"
+            value={`${operationalSources}/${sources.length}`}
+            hint="status: available"
+          />
+        </div>
       </div>
 
-      {!hasData ? (
-        <EmptyCard
-          title="No research data yet"
-          hint="Run a live RDAP scan or import a CSV of candidates to populate the dashboard."
-          action={
-            <Link href="/scanner" className="btn btn-primary">
-              Run your first scan
-            </Link>
-          }
-        />
-      ) : (
-        <div className="grid gap-6 lg:grid-cols-5">
-          <div className="lg:col-span-3">
-            <Section
-              title="Recent scans"
-              description="One row per multi-extension lookup session."
-              padded={false}
-              actions={
-                <Link href="/scanner" className="link text-xs">
-                  New scan →
-                </Link>
-              }
-            >
-              {recentSessions.length === 0 ? (
-                <div className="p-5">
-                  <p className="text-sm text-[var(--color-muted)]">
-                    No scan sessions recorded yet.
-                  </p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th className="text-right">Checked</th>
-                        <th className="text-right">Registered</th>
-                        <th className="text-right">No record</th>
-                        <th>Status</th>
-                        <th>When</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recentSessions.map((s) => (
-                        <tr key={s.id}>
-                          <td className="mono font-medium text-[var(--color-fg)]">
-                            {s.normalizedSld}
-                          </td>
-                          <td className="tnum text-right">
-                            {s.checkedCount}/{s.requestedCount}
-                          </td>
-                          <td className="tnum text-right">{s.registeredCount}</td>
-                          <td className="tnum text-right">{s.notFoundCount}</td>
-                          <td>
-                            <Badge
-                              tone={
-                                s.status === "COMPLETED"
-                                  ? "good"
-                                  : s.status === "FAILED"
-                                    ? "bad"
-                                    : "warn"
-                              }
-                              dot
-                            >
-                              {s.status}
-                            </Badge>
-                          </td>
-                          <td className="text-[var(--color-muted)]">
-                            {formatWhen(s.completedAt ?? s.startedAt)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Section>
-          </div>
-
-          <div className="space-y-6 lg:col-span-2">
-            <Section
-              title="Availability mix"
-              description="Normalized status across every registry check."
-            >
-              {statusRows.length === 0 ? (
-                <p className="text-sm text-[var(--color-muted)]">
-                  No registry checks recorded yet.
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {statusRows.map((row) => {
-                    const tone = availabilityTone(row.status);
-                    return (
-                      <li key={row.status}>
-                        <div className="mb-1.5 flex items-center justify-between text-xs">
-                          <span className="text-[var(--color-muted)]">
-                            {STATUS_LABEL[row.status] ?? row.status}
-                          </span>
-                          <span className="tnum text-[var(--color-fg)]">
-                            {row.count}
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-surface-3)]">
-                          <div
-                            className={`h-full rounded-full ${TONE_BAR[tone]}`}
-                            style={{
-                              width: `${Math.max(4, (row.count / maxStatus) * 100)}%`,
-                            }}
-                          />
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-              <p className="mt-4 text-[11px] leading-relaxed text-[var(--color-faint)]">
-                * &ldquo;No record&rdquo; means RDAP returned nothing for that
-                name — it is not proof the domain is available to register.
-              </p>
-            </Section>
-
-            <Section
-              title="Candidates by extension"
-              padded={false}
-              actions={
-                <Link href="/candidates" className="link text-xs">
-                  Manage →
-                </Link>
-              }
-            >
-              {candCounts.byTld.length === 0 ? (
-                <div className="p-5">
-                  <p className="text-sm text-[var(--color-muted)]">
-                    No candidates stored yet.
-                  </p>
-                </div>
-              ) : (
-                <table className="data-table">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-5">
+        <div className="min-w-0 lg:col-span-3">
+          <Panel
+            flush
+            icon="clock"
+            title="Recent investigations"
+            note="Latest RDAP lookups recorded on this instance"
+            actions={
+              <Link href="/scanner" className="btn btn-ghost btn-sm">
+                New lookup
+              </Link>
+            }
+          >
+            {recentSessions.length === 0 ? (
+              <Empty
+                icon="investigate"
+                title="No investigations recorded"
+                hint="Run a live RDAP lookup and it will appear here with its evidence."
+                action={
+                  <Link href="/scanner" className="btn btn-primary btn-sm">
+                    Open Investigate
+                  </Link>
+                }
+              />
+            ) : (
+              <div className="grid-wrap">
+                <table className="grid-table">
                   <thead>
                     <tr>
-                      <th>Extension</th>
-                      <th className="text-right">Count</th>
+                      <th>Name</th>
+                      <th>Coverage</th>
+                      <th className="num">Registered</th>
+                      <th className="num">No record</th>
+                      <th>Status</th>
+                      <th>When</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {candCounts.byTld
-                      .slice()
-                      .sort((a, b) => b.count - a.count)
-                      .map((row) => (
-                        <tr key={row.tld}>
-                          <td className="mono">{row.tld}</td>
-                          <td className="tnum text-right">{row.count}</td>
-                        </tr>
-                      ))}
+                    {recentSessions.map((s) => (
+                      <tr key={s.id}>
+                        <td>
+                          <Link
+                            href={`/scanner?name=${encodeURIComponent(s.normalizedSld)}`}
+                            className="primary mono"
+                          >
+                            {s.normalizedSld}
+                          </Link>
+                        </td>
+                        <td className="num">
+                          {s.checkedCount}/{s.requestedCount}
+                        </td>
+                        <td className="num">{s.registeredCount}</td>
+                        <td className="num">{s.notFoundCount}</td>
+                        <td>
+                          <Badge
+                            tone={
+                              s.status === "COMPLETED"
+                                ? "good"
+                                : s.status === "FAILED"
+                                  ? "bad"
+                                  : "warn"
+                            }
+                            dot
+                          >
+                            {s.status}
+                          </Badge>
+                        </td>
+                        <td className="faint">
+                          {formatWhen(s.completedAt ?? s.startedAt)}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
-              )}
-            </Section>
-          </div>
+              </div>
+            )}
+          </Panel>
         </div>
-      )}
+
+        <div className="min-w-0 space-y-6 lg:col-span-2">
+          <Panel
+            title="Availability mix"
+            note="Normalized status across every registry check"
+            icon="registry"
+            flush={false}
+          >
+            {statusRows.length === 0 ? (
+              <p className="text-[12.5px] text-[var(--color-ink-3)]">
+                No registry checks recorded yet.
+              </p>
+            ) : (
+              <ul className="space-y-3.5">
+                {statusRows.map((row) => (
+                  <li key={row.status}>
+                    <div className="mb-1.5 flex items-baseline justify-between text-[12px]">
+                      <span className="text-[var(--color-ink-2)]">
+                        {STATUS_LABEL[row.status] ?? row.status}
+                      </span>
+                      <span className="mono text-[var(--color-ink)]">{row.count}</span>
+                    </div>
+                    <Bar
+                      value={row.count}
+                      max={maxStatus}
+                      tone={availabilityTone(row.status)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Note>
+              * &ldquo;No record&rdquo; means RDAP returned nothing for that name —
+              it is not proof the domain is available to register.
+            </Note>
+          </Panel>
+
+          <Panel
+            title="Candidates by extension"
+            icon="pipeline"
+            actions={
+              <Link href="/candidates" className="link text-[11.5px]">
+                Manage →
+              </Link>
+            }
+          >
+            {candCounts.byTld.length === 0 ? (
+              <div className="px-5 py-6 text-[12.5px] text-[var(--color-ink-3)]">
+                No candidates stored yet.
+              </div>
+            ) : (
+              <table className="grid-table">
+                <thead>
+                  <tr>
+                    <th>Extension</th>
+                    <th className="num">Count</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {candCounts.byTld
+                    .slice()
+                    .sort((a, b) => b.count - a.count)
+                    .map((row) => (
+                      <tr key={row.tld}>
+                        <td className="mono">{row.tld}</td>
+                        <td className="num">{row.count}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            )}
+          </Panel>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <Note>
+          Every figure on this page is read from the local database or a live
+          registry lookup — nothing is simulated, sampled or invented. Coverage is
+          limited to extensions with a verified RDAP endpoint.
+        </Note>
+      </div>
     </>
+  );
+}
+
+function Signal({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="bg-[var(--color-panel)] px-5 py-4">
+      <div className="eyebrow">{label}</div>
+      <div className="stat-lg mt-2.5">{value}</div>
+      {hint ? (
+        <div className="mt-1.5 text-[11.5px] text-[var(--color-ink-3)]">{hint}</div>
+      ) : null}
+    </div>
   );
 }

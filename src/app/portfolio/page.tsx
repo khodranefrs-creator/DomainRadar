@@ -6,7 +6,16 @@ export default function Page() {
       title="Portfolio"
       description="Holdings, renewals, listings and realized outcomes."
       milestone="Milestone 8"
-      planned={["Acquisition cost, renewal dates, registrar","Renewal deadline alerts","Realized profit and concentration"]}
+      planned={[
+        "Acquisition cost, renewal dates, registrar",
+        "Renewal deadline alerts",
+        "Realized profit and concentration",
+      ]}
+      dataNeeds={[
+        "Holding records: registrar, cost, renewal date",
+        "Renewal-alert scheduling",
+        "Realized-outcome capture when a domain sells",
+      ]}
     />
   );
 }

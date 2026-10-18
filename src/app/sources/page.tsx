@@ -1,22 +1,12 @@
 ﻿import { Suspense } from "react";
 import { prisma } from "@/lib/db";
 import { tldRepository } from "@/lib/repository";
-import { PageHeader, Section } from "@/components/page-shell";
 import { Badge } from "@/components/badge";
+import { Note, Panel, PageHeader } from "@/components/ui";
+import { SourceStatus, TldStatus } from "@/lib/enums";
 
-const TLD_TONE: Record<string, "neutral" | "good" | "warn" | "bad" | "info" | "unknown"> = {
-  AVAILABLE: "good",
-  UNSUPPORTED: "neutral",
-  NEEDS_VERIFICATION: "warn",
-  DISABLED: "bad",
-};
-
-const SRC_TONE: Record<string, "neutral" | "good" | "warn" | "bad" | "info" | "unknown"> = {
-  AVAILABLE: "good",
-  MANUAL_ONLY: "info",
-  DISABLED: "bad",
-  RATE_LIMITED: "warn",
-  NEEDS_CONFIGURATION: "warn",
+export const metadata = {
+  title: "Registry · Domain Radar",
 };
 
 export default function SourcesPage() {
@@ -24,46 +14,93 @@ export default function SourcesPage() {
     <div>
       <PageHeader
         eyebrow="Registry"
-        title="Sources & TLDs"
-        description="Exactly which extensions can be checked, and every external provider with its permitted-use notes and current status. A planned adapter is never shown as operational."
+        title="Extensions & sources"
+        lead="Exactly which extensions can be checked, and every external provider with its permitted-use notes and current status. A planned adapter is never shown as operational."
       />
-      <Suspense fallback={<SourcesSkeleton />}>
-        <RegistryTables />
+      <Suspense fallback={<RegistrySkeleton />}>
+        <RegistryData />
       </Suspense>
     </div>
   );
 }
 
-function SourcesSkeleton() {
+function RegistrySkeleton() {
   return (
     <div className="space-y-6">
-      {[0, 1].map((i) => (
-        <div key={i} className="panel h-72 animate-pulse" />
-      ))}
+      <div className="skeleton h-[92px]" />
+      <div className="skeleton h-72" />
+      <div className="skeleton h-72" />
     </div>
   );
 }
 
-async function RegistryTables() {
+const TLD_TONE: Record<
+  string,
+  "neutral" | "good" | "warn" | "bad" | "info" | "unknown"
+> = {
+  AVAILABLE: "good",
+  NEEDS_VERIFICATION: "warn",
+  DISABLED: "bad",
+  UNSUPPORTED: "unknown",
+};
+
+const SRC_TONE: Record<
+  string,
+  "neutral" | "good" | "warn" | "bad" | "info" | "unknown"
+> = {
+  AVAILABLE: "good",
+  MANUAL_ONLY: "warn",
+  DISABLED: "bad",
+  RATE_LIMITED: "warn",
+  NEEDS_CONFIGURATION: "warn",
+};
+
+async function RegistryData() {
   const [tlds, sources] = await Promise.all([
     tldRepository.list(),
     prisma.source.findMany({ orderBy: { name: "asc" } }),
   ]);
 
+  const verifiedTlds = tlds.filter((t) => t.status === TldStatus.AVAILABLE).length;
+  const unsupportedTlds = tlds.filter(
+    (t) => t.status === TldStatus.UNSUPPORTED,
+  ).length;
+  const operational = sources.filter(
+    (s) => s.status === SourceStatus.AVAILABLE,
+  ).length;
+
   return (
     <div className="space-y-6">
-      <Section
+      <div className="panel overflow-hidden">
+        <div className="grid grid-cols-2 gap-px bg-[var(--color-line)] lg:grid-cols-4">
+          {[
+            ["Extensions tracked", tlds.length],
+            ["Verified endpoints", verifiedTlds],
+            ["Explicitly unsupported", unsupportedTlds],
+            ["Sources operational", `${operational}/${sources.length}`],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="bg-[var(--color-panel)] px-5 py-4">
+              <div className="eyebrow">{label}</div>
+              <div className="mono mt-2.5 text-[24px] leading-none text-[var(--color-ink)]">
+                {value}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <Panel
+        icon="registry"
         title="TLD registry"
-        description="rdapBaseUrl is confirmed with a live request. Extensions without a verified endpoint are explicitly UNSUPPORTED — never silently omitted."
-        padded={false}
+        note="rdapBaseUrl is confirmed with a live request; extensions without one are explicitly unsupported"
         actions={
-          <span className="text-xs text-[var(--color-faint)]">
+          <span className="mono text-[11px] text-[var(--color-ink-3)]">
             {tlds.length} extensions
           </span>
         }
       >
-        <div className="overflow-x-auto">
-          <table className="data-table">
+        <div className="grid-wrap">
+          <table className="grid-table">
             <thead>
               <tr>
                 <th>TLD</th>
@@ -77,51 +114,45 @@ async function RegistryTables() {
             <tbody>
               {tlds.map((t) => (
                 <tr key={t.id}>
-                  <td className="mono font-medium text-[var(--color-fg)]">
-                    {t.tld}
-                  </td>
+                  <td className="primary mono">{t.tld}</td>
                   <td>
                     <Badge tone={TLD_TONE[t.status] ?? "unknown"} dot>
                       {t.status}
                     </Badge>
                   </td>
-                  <td className="text-[var(--color-muted)]">
-                    {t.registryName ?? "—"}
+                  <td>{t.registryName ?? "—"}</td>
+                  <td className="mono text-[11.5px]">{t.rdapBaseUrl ?? "—"}</td>
+                  <td className="faint">
+                    {t.verifiedAt
+                      ? new Date(t.verifiedAt).toISOString().slice(0, 10)
+                      : "—"}
                   </td>
-                  <td className="mono text-xs text-[var(--color-muted)]">
-                    {t.rdapBaseUrl ?? "—"}
-                  </td>
-                  <td className="tnum text-[var(--color-muted)]">
-                    {t.verifiedAt ? t.verifiedAt.toISOString().slice(0, 10) : "—"}
-                  </td>
-                  <td className="max-w-xs text-xs text-[var(--color-muted)]">
-                    {t.notes ?? "—"}
-                  </td>
+                  <td className="max-w-[320px] text-[12px]">{t.notes ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </Section>
+      </Panel>
 
-      <Section
+      <Panel
+        icon="spark"
         title="Source registry"
-        description="External providers with permitted-use notes, rate limits and current status."
-        padded={false}
+        note="External providers with permitted-use notes, rate limits and current status"
         actions={
-          <span className="text-xs text-[var(--color-faint)]">
+          <span className="mono text-[11px] text-[var(--color-ink-3)]">
             {sources.length} sources
           </span>
         }
       >
-        <div className="overflow-x-auto">
-          <table className="data-table">
+        <div className="grid-wrap">
+          <table className="grid-table">
             <thead>
               <tr>
                 <th>Source</th>
                 <th>Kind</th>
                 <th>Status</th>
-                <th>Rate limit</th>
+                <th className="num">Rate limit</th>
                 <th>Attribution</th>
                 <th>Permitted use</th>
               </tr>
@@ -129,20 +160,18 @@ async function RegistryTables() {
             <tbody>
               {sources.map((s) => (
                 <tr key={s.id}>
-                  <td className="font-medium text-[var(--color-fg)]">{s.name}</td>
-                  <td className="text-[var(--color-muted)]">{s.kind}</td>
+                  <td className="primary">{s.name}</td>
+                  <td className="mono text-[11.5px]">{s.kind}</td>
                   <td>
                     <Badge tone={SRC_TONE[s.status] ?? "unknown"} dot>
                       {s.status}
                     </Badge>
                   </td>
-                  <td className="tnum text-[var(--color-muted)]">
+                  <td className="num">
                     {s.rateLimitPerMinute ? `${s.rateLimitPerMinute}/min` : "n/a"}
                   </td>
-                  <td className="text-[var(--color-muted)]">
-                    {s.attributionRequired ? "Required" : "—"}
-                  </td>
-                  <td className="max-w-md text-xs text-[var(--color-muted)]">
+                  <td>{s.attributionRequired ? "Required" : "—"}</td>
+                  <td className="max-w-[420px] text-[12px]">
                     {s.permittedUseNotes ?? "—"}
                   </td>
                 </tr>
@@ -150,7 +179,13 @@ async function RegistryTables() {
             </tbody>
           </table>
         </div>
-      </Section>
+      </Panel>
+
+      <Note>
+        A status of AVAILABLE means a live request has succeeded against the
+        provider. Planners and adapters that are not yet wired in are listed as
+        such and never implied to be operational.
+      </Note>
     </div>
   );
 }

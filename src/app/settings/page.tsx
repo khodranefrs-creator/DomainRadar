@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader, Section } from "@/components/page-shell";
+import { Note, Panel, PageHeader } from "@/components/ui";
 
 interface Settings {
   defaultTlds: string[];
@@ -73,7 +73,10 @@ export default function SettingsPage() {
     return (
       <div>
         <PageHeader eyebrow="System" title="Settings" />
-        <div className="panel h-64 animate-pulse" />
+        <div className="space-y-6">
+          <div className="skeleton h-40" />
+          <div className="skeleton h-56" />
+        </div>
       </div>
     );
   }
@@ -83,14 +86,17 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="System"
         title="Settings"
-        description="Local configuration. These bounds govern request budgets and pacing for every source adapter."
+        lead="Instance-level controls for this deployment. Request budget, concurrency and delay govern how live registry lookups are throttled."
       />
+
       <form onSubmit={save} className="space-y-6">
-        <Section
+        <Panel
+          icon="registry"
           title="Default extensions"
-          description="Pre-selected in the scanner when no extensions are chosen."
+          note="Pre-selected whenever you open Investigate"
+          flush={false}
         >
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {tlds.map((t) => {
               const on = settings.defaultTlds.includes(t.tld);
               return (
@@ -98,15 +104,15 @@ export default function SettingsPage() {
                   type="button"
                   key={t.tld}
                   onClick={() =>
-                    setSettings((s) =>
-                      s
+                    setSettings((prev) =>
+                      prev
                         ? {
-                            ...s,
+                            ...prev,
                             defaultTlds: on
-                              ? s.defaultTlds.filter((x) => x !== t.tld)
-                              : [...s.defaultTlds, t.tld],
+                              ? prev.defaultTlds.filter((x) => x !== t.tld)
+                              : [...prev.defaultTlds, t.tld],
                           }
-                        : s,
+                        : prev,
                     )
                   }
                   aria-pressed={on}
@@ -117,17 +123,26 @@ export default function SettingsPage() {
               );
             })}
           </div>
-        </Section>
+          <Note>
+            {settings.defaultTlds.length} of {tlds.length} extensions selected.
+            Extensions without a verified RDAP endpoint are marked with an
+            asterisk in Investigate.
+          </Note>
+        </Panel>
 
-        <Section
-          title="Request budget & pacing"
-          description="Applied to every outbound registry request."
+        <Panel
+          icon="spark"
+          title="Request behaviour"
+          note="Applies to every live RDAP lookup"
+          flush={false}
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <NumberField
               label="Request budget per run"
               value={settings.requestBudgetPerRun}
-              onChange={(v) => setSettings({ ...settings, requestBudgetPerRun: v })}
+              onChange={(v) =>
+                setSettings({ ...settings, requestBudgetPerRun: v })
+              }
             />
             <NumberField
               label="Max concurrency"
@@ -140,9 +155,7 @@ export default function SettingsPage() {
               onChange={(v) => setSettings({ ...settings, requestDelayMs: v })}
             />
             <div>
-              <label className="mb-1.5 block text-xs text-[var(--color-muted)]">
-                FX rate source
-              </label>
+              <label className="field-label">FX rate source</label>
               <input
                 value={settings.fxRateSource}
                 onChange={(e) =>
@@ -152,9 +165,9 @@ export default function SettingsPage() {
               />
             </div>
           </div>
-        </Section>
+        </Panel>
 
-        <Section title="Investor notes">
+        <Panel icon="console" title="Investor notes" flush={false}>
           <textarea
             value={settings.investorNotes ?? ""}
             onChange={(e) =>
@@ -164,7 +177,7 @@ export default function SettingsPage() {
             className="textarea"
             placeholder="Notes stored with this instance…"
           />
-        </Section>
+        </Panel>
 
         <div className="flex items-center gap-4">
           <button
@@ -175,9 +188,11 @@ export default function SettingsPage() {
             Save settings
           </button>
           {saved ? (
-            <span className="text-xs text-emerald-400">{saved}</span>
+            <span className="text-[11.5px] text-[var(--color-ok)]">{saved}</span>
           ) : null}
-          {error ? <span className="text-xs text-red-400">{error}</span> : null}
+          {error ? (
+            <span className="text-[11.5px] text-[var(--color-bad)]">{error}</span>
+          ) : null}
         </div>
       </form>
     </div>
@@ -195,14 +210,12 @@ function NumberField({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs text-[var(--color-muted)]">
-        {label}
-      </label>
+      <label className="field-label">{label}</label>
       <input
         type="number"
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="input tnum"
+        className="input mono"
       />
     </div>
   );
