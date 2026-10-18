@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/sidebar";
+import { MobileNav, Sidebar } from "@/components/sidebar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Domain Radar",
   description:
-    "Evidence-first domain investment research. Local-first, traceable, disciplined.",
+    "Evidence-first domain intelligence. RDAP-backed availability across every verified extension — nothing invented.",
 };
 
 export default function RootLayout({
@@ -30,15 +30,16 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full`}
     >
       <body className="min-h-full">
-        <div className="flex min-h-screen">
+        <MobileNav />
+        <div className="flex md:min-h-screen">
           <Sidebar />
-          <main className="flex-1 min-w-0 flex flex-col">
-            <div className="flex-1 px-6 py-6 max-w-[1600px] w-full mx-auto">
+          <main className="flex min-w-0 flex-1 flex-col">
+            <div className="mx-auto w-full max-w-[1500px] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
               {children}
             </div>
-            <footer className="px-6 py-4 text-xs text-[var(--color-muted)] border-t border-[var(--color-border)]">
-              Domain Radar · local-first · unverified lookups are never shown as
-              available · no data is invented
+            <footer className="border-t border-[var(--color-border)] px-6 py-4 text-xs text-[var(--color-faint)]">
+              Domain Radar · evidence-first · unverified lookups are never shown
+              as available · no data is invented
             </footer>
           </main>
         </div>

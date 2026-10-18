@@ -1,11 +1,15 @@
 ﻿import { NextResponse } from "next/server";
 import { candidateRepository } from "@/lib/candidate-repository";
 import { CsvError } from "@/lib/csv";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB import cap
 
 export async function POST(request: Request) {
+  const limit = rateLimit(request, "candidatesImport");
+  if (!limit.allowed) return tooManyRequests(limit);
+
   let text: string;
   let filename: string | undefined;
   const contentType = request.headers.get("content-type") ?? "";

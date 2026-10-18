@@ -2,6 +2,7 @@
 import { candidateRepository } from "@/lib/candidate-repository";
 import { parseDomain } from "@/lib/domain";
 import { candidateCreateSchema } from "@/lib/schemas";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 
 export async function GET(request: Request) {
@@ -21,6 +22,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const limit = rateLimit(request, "candidatesWrite");
+  if (!limit.allowed) return tooManyRequests(limit);
+
   let body: unknown;
   try {
     body = await request.json();

@@ -2,13 +2,20 @@
 import { settingsRepository } from "@/lib/repository";
 import { normalizeSld } from "@/lib/domain";
 import { runSearch, createDefaultSearchDeps } from "@/lib/rdap";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 // Multi-TLD search with live RDAP availability checks. Server-side only: the
 // client never supplies lookup URLs, and every request goes through the SSRF
 // allowlist inside the RDAP client. A 404 is reported as NOT_FOUND (registry
 // state), never as "available".
+//
+// This is the most expensive endpoint (one outbound registry request per TLD),
+// so it is rate limited per client IP.
 
 export async function POST(request: Request) {
+  const limit = rateLimit(request, "search");
+  if (!limit.allowed) return tooManyRequests(limit);
+
   let body: { name?: string; tlds?: unknown };
   try {
     body = await request.json();

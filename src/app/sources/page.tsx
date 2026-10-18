@@ -1,7 +1,7 @@
 ﻿import { Suspense } from "react";
 import { prisma } from "@/lib/db";
 import { tldRepository } from "@/lib/repository";
-import { PageHeader } from "@/components/page-shell";
+import { PageHeader, Section } from "@/components/page-shell";
 import { Badge } from "@/components/badge";
 
 const TLD_TONE: Record<string, "neutral" | "good" | "warn" | "bad" | "info" | "unknown"> = {
@@ -21,7 +21,12 @@ const SRC_TONE: Record<string, "neutral" | "good" | "warn" | "bad" | "info" | "u
 
 export default function SourcesPage() {
   return (
-    <div className="space-y-10">
+    <div>
+      <PageHeader
+        eyebrow="Registry"
+        title="Sources & TLDs"
+        description="Exactly which extensions can be checked, and every external provider with its permitted-use notes and current status. A planned adapter is never shown as operational."
+      />
       <Suspense fallback={<SourcesSkeleton />}>
         <RegistryTables />
       </Suspense>
@@ -31,12 +36,9 @@ export default function SourcesPage() {
 
 function SourcesSkeleton() {
   return (
-    <div className="space-y-10">
+    <div className="space-y-6">
       {[0, 1].map((i) => (
-        <div key={i}>
-          <div className="h-6 w-48 bg-[var(--color-surface-2)] rounded mb-4 animate-pulse" />
-          <div className="h-64 border border-[var(--color-border)] rounded-lg bg-[var(--color-surface)] animate-pulse" />
-        </div>
+        <div key={i} className="panel h-72 animate-pulse" />
       ))}
     </div>
   );
@@ -49,86 +51,106 @@ async function RegistryTables() {
   ]);
 
   return (
-    <>
-      <div>
-        <PageHeader
-          title="TLD Registry"
-          description="Which extensions can actually be checked, and how. rdapBaseUrl was confirmed with a live request on 2026-10-18. Extensions without a verified endpoint are explicitly UNSUPPORTED — never silently omitted or guessed."
-        />
-        <table className="w-full text-sm border border-[var(--color-border)] rounded-lg overflow-hidden">
-          <thead className="bg-[var(--color-surface-2)] text-[var(--color-muted)] text-xs">
-            <tr>
-              <th className="text-left px-3 py-2 font-medium">TLD</th>
-              <th className="text-left px-3 py-2 font-medium">Status</th>
-              <th className="text-left px-3 py-2 font-medium">Registry</th>
-              <th className="text-left px-3 py-2 font-medium">RDAP base</th>
-              <th className="text-left px-3 py-2 font-medium">Verified</th>
-              <th className="text-left px-3 py-2 font-medium">Notes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tlds.map((t) => (
-              <tr key={t.id} className="border-t border-[var(--color-border)]">
-                <td className="px-3 py-2 font-mono">{t.tld}</td>
-                <td className="px-3 py-2">
-                  <Badge tone={TLD_TONE[t.status] ?? "unknown"}>{t.status}</Badge>
-                </td>
-                <td className="px-3 py-2 text-[var(--color-muted)]">
-                  {t.registryName ?? "—"}
-                </td>
-                <td className="px-3 py-2 font-mono text-xs text-[var(--color-muted)]">
-                  {t.rdapBaseUrl ?? "—"}
-                </td>
-                <td className="px-3 py-2 text-[var(--color-muted)]">
-                  {t.verifiedAt ? t.verifiedAt.toISOString().slice(0, 10) : "—"}
-                </td>
-                <td className="px-3 py-2 text-[var(--color-muted)] text-xs">
-                  {t.notes ?? "—"}
-                </td>
+    <div className="space-y-6">
+      <Section
+        title="TLD registry"
+        description="rdapBaseUrl is confirmed with a live request. Extensions without a verified endpoint are explicitly UNSUPPORTED — never silently omitted."
+        padded={false}
+        actions={
+          <span className="text-xs text-[var(--color-faint)]">
+            {tlds.length} extensions
+          </span>
+        }
+      >
+        <div className="overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>TLD</th>
+                <th>Status</th>
+                <th>Registry</th>
+                <th>RDAP base</th>
+                <th>Verified</th>
+                <th>Notes</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {tlds.map((t) => (
+                <tr key={t.id}>
+                  <td className="mono font-medium text-[var(--color-fg)]">
+                    {t.tld}
+                  </td>
+                  <td>
+                    <Badge tone={TLD_TONE[t.status] ?? "unknown"} dot>
+                      {t.status}
+                    </Badge>
+                  </td>
+                  <td className="text-[var(--color-muted)]">
+                    {t.registryName ?? "—"}
+                  </td>
+                  <td className="mono text-xs text-[var(--color-muted)]">
+                    {t.rdapBaseUrl ?? "—"}
+                  </td>
+                  <td className="tnum text-[var(--color-muted)]">
+                    {t.verifiedAt ? t.verifiedAt.toISOString().slice(0, 10) : "—"}
+                  </td>
+                  <td className="max-w-xs text-xs text-[var(--color-muted)]">
+                    {t.notes ?? "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Section>
 
-      <div>
-        <PageHeader
-          title="Source Registry"
-          description="Every external provider with its permitted-use notes, rate limits and current status. A planned adapter is never shown as operational."
-        />
-        <table className="w-full text-sm border border-[var(--color-border)] rounded-lg overflow-hidden">
-          <thead className="bg-[var(--color-surface-2)] text-[var(--color-muted)] text-xs">
-            <tr>
-              <th className="text-left px-3 py-2 font-medium">Source</th>
-              <th className="text-left px-3 py-2 font-medium">Kind</th>
-              <th className="text-left px-3 py-2 font-medium">Status</th>
-              <th className="text-left px-3 py-2 font-medium">Rate limit</th>
-              <th className="text-left px-3 py-2 font-medium">Attribution</th>
-              <th className="text-left px-3 py-2 font-medium">Permitted use</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sources.map((s) => (
-              <tr key={s.id} className="border-t border-[var(--color-border)]">
-                <td className="px-3 py-2">{s.name}</td>
-                <td className="px-3 py-2 text-[var(--color-muted)]">{s.kind}</td>
-                <td className="px-3 py-2">
-                  <Badge tone={SRC_TONE[s.status] ?? "unknown"}>{s.status}</Badge>
-                </td>
-                <td className="px-3 py-2 text-[var(--color-muted)]">
-                  {s.rateLimitPerMinute ? `${s.rateLimitPerMinute}/min` : "n/a"}
-                </td>
-                <td className="px-3 py-2 text-[var(--color-muted)]">
-                  {s.attributionRequired ? "Required" : "—"}
-                </td>
-                <td className="px-3 py-2 text-xs text-[var(--color-muted)] max-w-md">
-                  {s.permittedUseNotes ?? "—"}
-                </td>
+      <Section
+        title="Source registry"
+        description="External providers with permitted-use notes, rate limits and current status."
+        padded={false}
+        actions={
+          <span className="text-xs text-[var(--color-faint)]">
+            {sources.length} sources
+          </span>
+        }
+      >
+        <div className="overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Kind</th>
+                <th>Status</th>
+                <th>Rate limit</th>
+                <th>Attribution</th>
+                <th>Permitted use</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
+            </thead>
+            <tbody>
+              {sources.map((s) => (
+                <tr key={s.id}>
+                  <td className="font-medium text-[var(--color-fg)]">{s.name}</td>
+                  <td className="text-[var(--color-muted)]">{s.kind}</td>
+                  <td>
+                    <Badge tone={SRC_TONE[s.status] ?? "unknown"} dot>
+                      {s.status}
+                    </Badge>
+                  </td>
+                  <td className="tnum text-[var(--color-muted)]">
+                    {s.rateLimitPerMinute ? `${s.rateLimitPerMinute}/min` : "n/a"}
+                  </td>
+                  <td className="text-[var(--color-muted)]">
+                    {s.attributionRequired ? "Required" : "—"}
+                  </td>
+                  <td className="max-w-md text-xs text-[var(--color-muted)]">
+                    {s.permittedUseNotes ?? "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+    </div>
   );
 }

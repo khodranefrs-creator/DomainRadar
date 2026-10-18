@@ -13,8 +13,12 @@ Two rules drive the whole project:
 
 ## Status — Milestone 2 (live RDAP availability)
 
-- Local Next.js app bound to `127.0.0.1` only by default. Remote access requires
-  an explicit, token-gated deployment mode (see below).
+- Local Next.js app bound to `127.0.0.1` only by default. The hosted deployment
+  runs in explicitly opt-in public mode (see below).
+- Redesigned analytical UI: a data-driven dashboard, grouped navigation with a
+  mobile layout, and consistent data tables, badges and empty states.
+- Public-mode abuse controls: per-IP rate limiting on the RDAP scan and every
+  write endpoint, bounded payloads and Zod validation on all external input.
 - SQLite database via Prisma (`data/domain-radar.db`).
 - Multi-TLD schema: `TldRegistry`, `DomainSearchSession`, `DomainVariantCheck`,
   candidates, evidence, sources, settings and more.
@@ -76,41 +80,27 @@ The app is local-first and, by default, only answers requests whose `Host` heade
 is loopback (`localhost`, `127.0.0.1`, `::1`). Anything else gets
 `403 Forbidden: Domain Radar is local-only.`
 
-For personal remote access there is an explicit, opt-in **deployment mode**,
-controlled by environment variables:
+The hosted deployment runs in an explicit, opt-in **public mode**:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `DOMAIN_RADAR_ACCESS_MODE` | `local` | `local` or `deployment`. Any other value is treated as `local`. |
-| `DOMAIN_RADAR_ACCESS_TOKEN` | — | Shared secret. **Required** in deployment mode; used as the login password and as the session-cookie signing key. |
-| `DOMAIN_RADAR_ACCESS_USER` | `domain-radar` | HTTP Basic auth username (API/CLI clients only). |
+| `DOMAIN_RADAR_ACCESS_MODE` | `local` | `local` or `public`. **Any other value is treated as `local`.** |
 
-Deployment mode rules:
+Public mode rules:
 
-- The `Host` header is **never** used as the access boundary — it is trivial to
-  spoof.
-- Anonymous page visits are redirected to `/login` with **no** `WWW-Authenticate`
-  header, so the browser shows no Basic-auth prompt. `/login` sets a signed,
-  HttpOnly session cookie (`HMAC-SHA256` keyed by the token) on the correct
-  password; afterwards the cookie is sent automatically on every navigation and
-  fetch, so the password is entered once per browser.
-- Every page **and** every `/api/*` route still requires that session (or HTTP
-  Basic credentials, for scripts). Unauthenticated `/api/*` requests get a plain
-  `401`.
-- Only `/login`, `/api/auth/login`, `/api/auth/logout` and Next's static assets
-  are reachable without a session — none of them expose application data, the
-  database, or the RDAP scanning endpoint.
-- If deployment mode is on but `DOMAIN_RADAR_ACCESS_TOKEN` is unset, protected
-  paths **fail closed** with `503`; the login page still loads so it can report the
-  misconfiguration.
-- Local mode is unchanged: loopback-only, and neither a session cookie nor
-  credentials can bypass the guard.
-- Generate a token with `openssl rand -base64 32` and set it as a Vercel project
-  environment variable. Never commit it.
+- It is opt-in only: it is enabled only when `DOMAIN_RADAR_ACCESS_MODE=public`. A
+  typo can never accidentally expose the app.
+- Every page and `/api/*` route is served without authentication. There is no
+  login, no session cookie and no Basic-auth prompt.
+- The `Host` header is **not** used as a boundary in public mode.
+- Abuse controls still apply: the RDAP scan and every write/import endpoint are
+  rate limited per client IP, imports are capped at 5 MB, and all input is
+  validated with Zod before it reaches the database.
+- Local mode is unchanged: loopback-only, and no request configuration can bypass
+  the guard.
 
-Set `DOMAIN_RADAR_ACCESS_MODE=deployment` and `DOMAIN_RADAR_ACCESS_TOKEN=...` in
-the host's environment (e.g. Vercel → Project → Settings → Environment Variables),
-then redeploy.
+Set `DOMAIN_RADAR_ACCESS_MODE=public` in the host's environment (e.g. Vercel →
+Project → Settings → Environment Variables), then redeploy. No token is required.
 
 ### Dual database — SQLite local · PostgreSQL production
 
@@ -146,11 +136,10 @@ If `TEST_DATABASE_URL` is set it points the PostgreSQL test at that server; the
 test always forces its own `domain_radar_test` schema, so production data is never
 touched — the test creates and cleans up its own rows there.
 
-**Deployment status.** The app is deployed and runs in **deployment mode** behind
-a login: every page and API requires a session, anonymous visitors are redirected
-to `/login` (no browser Basic-auth prompt), and nothing is publicly readable.
-Local development stays loopback-only by default. The database credentials and the
-access token are never sent to the client.
+**Deployment status.** The app is deployed and runs in **public mode** — openly
+accessible, with per-IP rate limits and input validation on every write and scan
+endpoint. Local development stays loopback-only by default. Database credentials
+are never sent to the client.
 
 ## Scripts
 

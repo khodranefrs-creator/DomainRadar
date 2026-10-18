@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader, StatCard, EmptyCard } from "@/components/page-shell";
+import { PageHeader, StatCard, EmptyCard, Section } from "@/components/page-shell";
 import { Badge } from "@/components/badge";
 
 interface VariantView {
@@ -68,29 +68,20 @@ const STATUS_LABEL: Record<string, string> = {
   UNKNOWN: "Unknown",
 };
 
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 export default function ScannerPage() {
-  const [name, setName] = useState("AgentCapability");
+  const [name, setName] = useState("");
   const [tlds, setTlds] = useState<TldRow[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [result, setResult] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<SearchResponse | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     fetch("/api/tlds")
       .then((r) => r.json())
       .then((data: { tlds: TldRow[] }) => {
+        if (cancelled) return;
         setTlds(data.tlds);
         setSelected(
           data.tlds
@@ -98,7 +89,12 @@ export default function ScannerPage() {
             .map((t) => t.tld),
         );
       })
-      .catch(() => setError("Could not load TLD registry"));
+      .catch(() => {
+        if (!cancelled) setError("Could not load the extension registry.");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function toggle(tld: string) {
@@ -125,7 +121,7 @@ export default function ScannerPage() {
         setResult(data);
       }
     } catch {
-      setError("Network error");
+      setError("Network error while contacting the registry.");
     } finally {
       setLoading(false);
     }
@@ -134,132 +130,184 @@ export default function ScannerPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Research"
         title="Domain Scanner"
-        description="Live registry lookups (RDAP) across the selected extensions. RDAP reports registry state only — 'Not found' means no registry record was returned, it is NOT proof a domain is available to register."
+        description="Live registry lookups (RDAP) across the extensions you select. RDAP reports registry state only — 'Not found' means no registry record was returned, it is NOT proof a domain is available to register."
       />
 
-      <form onSubmit={runSearch} className="mb-6">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div>
-            <label htmlFor="sld" className="block text-xs text-[var(--color-muted)] mb-1">
-              Name (second-level label)
-            </label>
-            <input
-              id="sld"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md px-3 py-2 text-sm w-72 font-mono"
-              placeholder="AgentCapability"
-              autoComplete="off"
-            />
+      <form onSubmit={runSearch}>
+        <Section
+          title="Query"
+          description="Enter the second-level label, then choose the extensions to check."
+          actions={
+            <span className="text-xs text-[var(--color-faint)]">
+              {selected.length} selected
+            </span>
+          }
+        >
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-[16rem] flex-1">
+              <label
+                htmlFor="sld"
+                className="mb-1.5 block text-xs text-[var(--color-muted)]"
+              >
+                Name (second-level label)
+              </label>
+              <input
+                id="sld"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="input mono"
+                placeholder="agentcapability"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading || selected.length === 0 || name.trim().length === 0}
+              className="btn btn-primary"
+            >
+              {loading ? "Checking..." : "Check availability"}
+            </button>
           </div>
-          <button
-            type="submit"
-            disabled={loading || selected.length === 0}
-            className="px-4 py-2 rounded-md bg-[var(--color-accent)] text-white text-sm font-medium disabled:opacity-50"
-          >
-            {loading ? "Checking…" : "Check availability"}
-          </button>
-        </div>
 
-        <fieldset className="mt-4">
-          <legend className="text-xs text-[var(--color-muted)] mb-2">
-            Extensions ({selected.length} selected)
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            {tlds.map((t) => {
-              const on = selected.includes(t.tld);
-              return (
-                <button
-                  type="button"
-                  key={t.tld}
-                  onClick={() => toggle(t.tld)}
-                  aria-pressed={on}
-                  className={[
-                    "px-2.5 py-1 rounded-md text-xs font-mono border",
-                    on
-                      ? "bg-[var(--color-accent)] text-white border-[var(--color-accent)]"
-                      : "bg-[var(--color-surface)] text-[var(--color-muted)] border-[var(--color-border)]",
-                  ].join(" ")}
-                >
-                  {t.tld}
-                  {t.status !== "AVAILABLE" ? " *" : ""}
-                </button>
-              );
-            })}
-          </div>
-          <p className="text-[11px] text-[var(--color-muted)] mt-2">
-            * extension is not a verified RDAP-available TLD — it will be reported
-            as unsupported/needs-verification, never guessed.
-          </p>
-        </fieldset>
+          <fieldset className="mt-5">
+            <legend className="eyebrow mb-2">Extensions</legend>
+            <div className="flex flex-wrap gap-2">
+              {tlds.map((t) => {
+                const on = selected.includes(t.tld);
+                return (
+                  <button
+                    type="button"
+                    key={t.tld}
+                    onClick={() => toggle(t.tld)}
+                    aria-pressed={on}
+                    className="chip"
+                    title={t.displayName}
+                  >
+                    {t.tld}
+                    {t.status !== "AVAILABLE" ? (
+                      <span className="text-amber-400">*</span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-[11px] text-[var(--color-faint)]">
+              * extension has no verified RDAP endpoint — reported as
+              unsupported, never guessed.
+            </p>
+          </fieldset>
+        </Section>
       </form>
 
       {error ? (
-        <div className="border border-red-600/50 bg-red-500/10 text-red-300 text-sm rounded-md px-4 py-3 mb-4">
+        <div className="mt-4 rounded-lg border border-red-600/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
           {error}
         </div>
       ) : null}
 
-      {result ? (
-        <div>
-          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 mb-4">
-            <StatCard label="Requested" value={result.requestedCount} />
-            <StatCard label="Checked" value={result.checkedCount} />
-            <StatCard label="Registered" value={result.registeredCount} />
-            <StatCard label="Not found*" value={result.notFoundCount} />
-            <StatCard label="Unsupported" value={result.unsupportedCount} />
-            <StatCard label="Unresolved" value={result.unresolvedCount} />
-            <StatCard label="Errors" value={result.errorCount} />
-          </div>
+      <div className="mt-6">
+        {result ? (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+              <StatCard label="Requested" value={result.requestedCount} tone="neutral" />
+              <StatCard label="Checked" value={result.checkedCount} tone="info" />
+              <StatCard
+                label="Registered"
+                value={result.registeredCount}
+                tone="danger"
+              />
+              <StatCard label="Not found" value={result.notFoundCount} tone="accent" />
+              <StatCard
+                label="Unsupported"
+                value={result.unsupportedCount}
+                tone="neutral"
+              />
+              <StatCard
+                label="Unresolved"
+                value={result.unresolvedCount}
+                tone="warn"
+              />
+              <StatCard label="Errors" value={result.errorCount} tone="danger" />
+            </div>
 
-          <table className="w-full text-sm border border-[var(--color-border)] rounded-lg overflow-hidden">
-            <thead className="bg-[var(--color-surface-2)] text-[var(--color-muted)] text-xs">
-              <tr>
-                <th className="text-left px-3 py-2 font-medium">Domain</th>
-                <th className="text-left px-3 py-2 font-medium">Status</th>
-                <th className="text-left px-3 py-2 font-medium">Source</th>
-                <th className="text-left px-3 py-2 font-medium">HTTP</th>
-                <th className="text-left px-3 py-2 font-medium">Checked</th>
-                <th className="text-left px-3 py-2 font-medium">Detail</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.variants.map((v) => (
-                <tr key={v.tld} className="border-t border-[var(--color-border)]">
-                  <td className="px-3 py-2 font-mono">{v.fqdn}</td>
-                  <td className="px-3 py-2">
-                    <Badge tone={STATUS_TONE[v.status] ?? "unknown"}>
-                      {STATUS_LABEL[v.status] ?? v.status}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-2 text-[var(--color-muted)]">
-                    {v.source ?? "—"}
-                  </td>
-                  <td className="px-3 py-2 text-[var(--color-muted)] font-mono">
-                    {v.httpStatus ?? "—"}
-                  </td>
-                  <td className="px-3 py-2 text-[var(--color-muted)] whitespace-nowrap">
-                    {v.cached ? "cached" : v.lastCheckedAt ? formatTime(v.lastCheckedAt) : "—"}
-                  </td>
-                  <td className="px-3 py-2 text-[var(--color-muted)]">{v.detail}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="text-xs text-[var(--color-muted)] mt-3">
-            * {result.note}
-          </p>
-          <p className="text-[11px] text-[var(--color-muted)] mt-1">
-            Session {result.sessionId} · {result.status}
-          </p>
-        </div>
-      ) : (
-        <EmptyCard
-          title="No search yet"
-          hint="Choose extensions and a name, then run a live RDAP check."
-        />
-      )}
+            <Section
+              title="Results"
+              description={result.note}
+              padded={false}
+              actions={
+                <Badge
+                  tone={
+                    result.status === "COMPLETED"
+                      ? "good"
+                      : result.status === "FAILED"
+                        ? "bad"
+                        : "warn"
+                  }
+                  dot
+                >
+                  {result.status}
+                </Badge>
+              }
+            >
+              <div className="overflow-x-auto">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Domain</th>
+                      <th>Status</th>
+                      <th>Source</th>
+                      <th className="text-right">HTTP</th>
+                      <th>Checked</th>
+                      <th>Detail</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.variants.map((v) => (
+                      <tr key={v.tld}>
+                        <td className="mono font-medium text-[var(--color-fg)]">
+                          {v.fqdn}
+                        </td>
+                        <td>
+                          <Badge tone={STATUS_TONE[v.status] ?? "unknown"} dot>
+                            {STATUS_LABEL[v.status] ?? v.status}
+                          </Badge>
+                        </td>
+                        <td className="text-[var(--color-muted)]">
+                          {v.source ?? "—"}
+                        </td>
+                        <td className="tnum text-right text-[var(--color-muted)]">
+                          {v.httpStatus ?? "—"}
+                        </td>
+                        <td className="text-[var(--color-muted)]">
+                          {v.cached
+                            ? "cached"
+                            : v.lastCheckedAt
+                              ? new Date(v.lastCheckedAt).toISOString().slice(11, 19)
+                              : "—"}
+                        </td>
+                        <td className="max-w-xs text-[var(--color-muted)]">
+                          {v.detail}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+            <p className="text-xs text-[var(--color-faint)]">
+              * {result.note}
+            </p>
+          </div>
+        ) : (
+          <EmptyCard
+            title="No search yet"
+            hint="Choose a name and extensions above, then run a live RDAP check."
+          />
+        )}
+      </div>
     </div>
   );
 }

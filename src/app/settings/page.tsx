@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader } from "@/components/page-shell";
+import { PageHeader, Section } from "@/components/page-shell";
 
 interface Settings {
   defaultTlds: string[];
@@ -25,11 +25,13 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     Promise.all([
       fetch("/api/settings").then((r) => r.json()),
       fetch("/api/tlds").then((r) => r.json()),
     ])
       .then(([s, t]) => {
+        if (cancelled) return;
         setSettings({
           defaultTlds: s.defaultTlds ?? [],
           requestBudgetPerRun: s.requestBudgetPerRun,
@@ -41,7 +43,12 @@ export default function SettingsPage() {
         });
         setTlds(t.tlds ?? []);
       })
-      .catch(() => setError("Failed to load settings"));
+      .catch(() => {
+        if (!cancelled) setError("Failed to load settings");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function save(e: React.FormEvent) {
@@ -63,20 +70,26 @@ export default function SettingsPage() {
   }
 
   if (!settings) {
-    return <p className="text-sm text-[var(--color-muted)]">Loading settings…</p>;
+    return (
+      <div>
+        <PageHeader eyebrow="System" title="Settings" />
+        <div className="panel h-64 animate-pulse" />
+      </div>
+    );
   }
 
   return (
     <div>
       <PageHeader
+        eyebrow="System"
         title="Settings"
         description="Local configuration. These bounds govern request budgets and pacing for every source adapter."
       />
-      <form onSubmit={save} className="space-y-6 max-w-2xl">
-        <div>
-          <label className="block text-xs text-[var(--color-muted)] mb-2">
-            Default extensions for scanning
-          </label>
+      <form onSubmit={save} className="space-y-6">
+        <Section
+          title="Default extensions"
+          description="Pre-selected in the scanner when no extensions are chosen."
+        >
           <div className="flex flex-wrap gap-2">
             {tlds.map((t) => {
               const on = settings.defaultTlds.includes(t.tld);
@@ -97,69 +110,73 @@ export default function SettingsPage() {
                     )
                   }
                   aria-pressed={on}
-                  className={[
-                    "px-2.5 py-1 rounded-md text-xs font-mono border",
-                    on
-                      ? "bg-[var(--color-accent)] text-white border-[var(--color-accent)]"
-                      : "bg-[var(--color-surface)] text-[var(--color-muted)] border-[var(--color-border)]",
-                  ].join(" ")}
+                  className="chip"
                 >
                   {t.tld}
                 </button>
               );
             })}
           </div>
-        </div>
+        </Section>
 
-        <div className="grid grid-cols-2 gap-4">
-          <NumberField
-            label="Request budget per run"
-            value={settings.requestBudgetPerRun}
-            onChange={(v) => setSettings({ ...settings, requestBudgetPerRun: v })}
-          />
-          <NumberField
-            label="Max concurrency"
-            value={settings.maxConcurrency}
-            onChange={(v) => setSettings({ ...settings, maxConcurrency: v })}
-          />
-          <NumberField
-            label="Request delay (ms)"
-            value={settings.requestDelayMs}
-            onChange={(v) => setSettings({ ...settings, requestDelayMs: v })}
-          />
-          <div>
-            <label className="block text-xs text-[var(--color-muted)] mb-1">
-              FX rate source
-            </label>
-            <input
-              value={settings.fxRateSource}
-              onChange={(e) => setSettings({ ...settings, fxRateSource: e.target.value })}
-              className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md px-3 py-2 text-sm"
+        <Section
+          title="Request budget & pacing"
+          description="Applied to every outbound registry request."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <NumberField
+              label="Request budget per run"
+              value={settings.requestBudgetPerRun}
+              onChange={(v) => setSettings({ ...settings, requestBudgetPerRun: v })}
             />
+            <NumberField
+              label="Max concurrency"
+              value={settings.maxConcurrency}
+              onChange={(v) => setSettings({ ...settings, maxConcurrency: v })}
+            />
+            <NumberField
+              label="Request delay (ms)"
+              value={settings.requestDelayMs}
+              onChange={(v) => setSettings({ ...settings, requestDelayMs: v })}
+            />
+            <div>
+              <label className="mb-1.5 block text-xs text-[var(--color-muted)]">
+                FX rate source
+              </label>
+              <input
+                value={settings.fxRateSource}
+                onChange={(e) =>
+                  setSettings({ ...settings, fxRateSource: e.target.value })
+                }
+                className="input"
+              />
+            </div>
           </div>
-        </div>
+        </Section>
 
-        <div>
-          <label className="block text-xs text-[var(--color-muted)] mb-1">
-            Investor notes
-          </label>
+        <Section title="Investor notes">
           <textarea
             value={settings.investorNotes ?? ""}
-            onChange={(e) => setSettings({ ...settings, investorNotes: e.target.value })}
+            onChange={(e) =>
+              setSettings({ ...settings, investorNotes: e.target.value })
+            }
             rows={4}
-            className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md px-3 py-2 text-sm"
+            className="textarea"
+            placeholder="Notes stored with this instance…"
           />
-        </div>
+        </Section>
 
         <div className="flex items-center gap-4">
           <button
             type="submit"
             disabled={settings.defaultTlds.length === 0}
-            className="px-4 py-2 rounded-md bg-[var(--color-accent)] text-white text-sm font-medium disabled:opacity-50"
+            className="btn btn-primary"
           >
             Save settings
           </button>
-          {saved ? <span className="text-xs text-emerald-400">{saved}</span> : null}
+          {saved ? (
+            <span className="text-xs text-emerald-400">{saved}</span>
+          ) : null}
           {error ? <span className="text-xs text-red-400">{error}</span> : null}
         </div>
       </form>
@@ -178,12 +195,14 @@ function NumberField({
 }) {
   return (
     <div>
-      <label className="block text-xs text-[var(--color-muted)] mb-1">{label}</label>
+      <label className="mb-1.5 block text-xs text-[var(--color-muted)]">
+        {label}
+      </label>
       <input
         type="number"
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md px-3 py-2 text-sm w-full"
+        className="input tnum"
       />
     </div>
   );

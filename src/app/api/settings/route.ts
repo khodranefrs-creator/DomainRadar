@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { settingsRepository } from "@/lib/repository";
 import { userSettingsSchema } from "@/lib/schemas";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 
 export async function GET() {
@@ -12,6 +13,9 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const limit = rateLimit(request, "settingsWrite");
+  if (!limit.allowed) return tooManyRequests(limit);
+
   let body: unknown;
   try {
     body = await request.json();

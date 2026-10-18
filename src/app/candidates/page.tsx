@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PageHeader, EmptyCard } from "@/components/page-shell";
+import { PageHeader, Section, EmptyCard } from "@/components/page-shell";
 import { Badge } from "@/components/badge";
 
 interface Candidate {
@@ -15,7 +15,10 @@ interface Candidate {
   updatedAt: string;
 }
 
-const STATUS_TONE: Record<string, "neutral" | "good" | "warn" | "bad" | "info" | "unknown"> = {
+const STATUS_TONE: Record<
+  string,
+  "neutral" | "good" | "warn" | "bad" | "info" | "unknown"
+> = {
   CANDIDATE: "info",
   SHORTLISTED: "good",
   REJECTED: "bad",
@@ -72,19 +75,22 @@ export default function CandidatesPage() {
     const form = new FormData();
     form.append("file", file);
     try {
-      const res = await fetch("/api/candidates/import", { method: "POST", body: form });
+      const res = await fetch("/api/candidates/import", {
+        method: "POST",
+        body: form,
+      });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Import failed");
       } else {
         const r = data.result;
         setImportResult(
-          `Imported ${r.importedRows} of ${r.totalRows} rows; ${r.errorRows} errors, ${r.skippedRows} blank skipped.`,
+          `Imported ${r.importedRows} of ${r.totalRows} rows · ${r.errorRows} errors · ${r.skippedRows} blank skipped.`,
         );
         if (fileRef.current) fileRef.current.value = "";
         const refreshed = await fetchCandidates();
         setItems(refreshed.items ?? []);
-        setTotal(data.total ?? 0);
+        setTotal(refreshed.total ?? 0);
       }
     } catch {
       setError("Network error during import");
@@ -92,70 +98,67 @@ export default function CandidatesPage() {
   }
 
   const tldOptions = Array.from(new Set(items.map((i) => i.tld))).sort();
-
   return (
     <div>
       <PageHeader
+        eyebrow="Research"
         title="Candidates"
-        description="Domain candidates stored locally. Import and export CSV. Unknown extensions in an import are auto-registered as NEEDS_VERIFICATION, never dropped silently."
+        description="Domain candidates stored locally. Import and export CSV. Unknown extensions in an import are auto-registered as NEEDS_VERIFICATION — never dropped silently."
         actions={
-          <a
-            href="/api/candidates/export"
-            className="text-sm px-3 py-1.5 rounded-md border border-[var(--color-border)] hover:bg-[var(--color-surface-2)]"
-          >
+          <a href="/api/candidates/export" className="btn btn-ghost">
             Export CSV
           </a>
         }
       />
 
-      <form
-        onSubmit={handleImport}
-        className="flex flex-wrap items-center gap-3 mb-4 border border-[var(--color-border)] rounded-lg px-4 py-3 bg-[var(--color-surface)]"
+      <Section
+        title="Import candidates"
+        description="CSV with a 'domain' column and optional status / generation_rule / seed_terms / notes."
+        actions={
+          <span className="text-xs text-[var(--color-faint)]">
+            5 MB max · rate limited
+          </span>
+        }
       >
-        <label className="text-xs text-[var(--color-muted)]" htmlFor="csv">
-          Import CSV (column: domain, optional status / generation_rule / seed_terms / notes)
-        </label>
-        <input
-          ref={fileRef}
-          id="csv"
-          type="file"
-          accept=".csv,text/csv"
-          className="text-sm"
-        />
-        <button
-          type="submit"
-          className="px-3 py-1.5 rounded-md bg-[var(--color-accent)] text-white text-sm font-medium"
-        >
-          Import
-        </button>
-        {importResult ? (
-          <span className="text-xs text-emerald-400">{importResult}</span>
-        ) : null}
-      </form>
+        <form onSubmit={handleImport} className="flex flex-wrap items-center gap-3">
+          <input
+            ref={fileRef}
+            id="csv"
+            type="file"
+            accept=".csv,text/csv"
+            className="text-sm text-[var(--color-muted)] file:mr-3 file:rounded-md file:border file:border-[var(--color-border-strong)] file:bg-[var(--color-surface-2)] file:px-3 file:py-1.5 file:text-xs file:text-[var(--color-fg)]"
+          />
+          <button type="submit" className="btn btn-primary">
+            Import
+          </button>
+          {importResult ? (
+            <span className="text-xs text-emerald-400">{importResult}</span>
+          ) : null}
+        </form>
+      </Section>
 
-      <div className="flex flex-wrap gap-3 mb-4">
+      <div className="my-4 flex flex-wrap items-center gap-3">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Filter by domainâ€¦"
-          className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md px-3 py-2 text-sm w-64"
+          placeholder="Filter by domain..."
+          className="input w-64 max-w-full"
         />
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md px-3 py-2 text-sm"
+          className="select w-44"
         >
           <option value="">All statuses</option>
-          {["CANDIDATE", "SHORTLISTED", "REJECTED", "ARCHIVED"].map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
+          <option value="CANDIDATE">Candidate</option>
+          <option value="SHORTLISTED">Shortlisted</option>
+          <option value="REJECTED">Rejected</option>
+          <option value="ARCHIVED">Archived</option>
         </select>
         <select
           value={tld}
           onChange={(e) => setTld(e.target.value)}
-          className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md px-3 py-2 text-sm"
+          className="select w-36"
         >
           <option value="">All extensions</option>
           {tldOptions.map((t) => (
@@ -164,13 +167,13 @@ export default function CandidatesPage() {
             </option>
           ))}
         </select>
-        <span className="text-xs text-[var(--color-muted)] self-center">
+        <span className="ml-auto text-xs text-[var(--color-muted)]">
           {total} total
         </span>
       </div>
 
       {error ? (
-        <div className="border border-red-600/50 bg-red-500/10 text-red-300 text-sm rounded-md px-4 py-3 mb-4">
+        <div className="mb-4 rounded-lg border border-red-600/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
           {error}
         </div>
       ) : null}
@@ -181,36 +184,43 @@ export default function CandidatesPage() {
           hint="Import a CSV with a 'domain' column, e.g. agentcapability.com"
         />
       ) : (
-        <table className="w-full text-sm border border-[var(--color-border)] rounded-lg overflow-hidden">
-          <thead className="bg-[var(--color-surface-2)] text-[var(--color-muted)] text-xs">
-            <tr>
-              <th className="text-left px-3 py-2 font-medium">Domain</th>
-              <th className="text-left px-3 py-2 font-medium">Extension</th>
-              <th className="text-left px-3 py-2 font-medium">Status</th>
-              <th className="text-left px-3 py-2 font-medium">Generation rule</th>
-              <th className="text-left px-3 py-2 font-medium">Updated</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((c) => (
-              <tr key={c.id} className="border-t border-[var(--color-border)]">
-                <td className="px-3 py-2 font-mono">{c.fqdn}</td>
-                <td className="px-3 py-2 font-mono text-[var(--color-muted)]">{c.tld}</td>
-                <td className="px-3 py-2">
-                  <Badge tone={STATUS_TONE[c.status] ?? "neutral"}>{c.status}</Badge>
-                </td>
-                <td className="px-3 py-2 text-[var(--color-muted)]">
-                  {c.generationRule ?? "â€”"}
-                </td>
-                <td className="px-3 py-2 text-[var(--color-muted)]">
-                  {new Date(c.updatedAt).toISOString().slice(0, 10)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="panel overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Domain</th>
+                  <th>Extension</th>
+                  <th>Status</th>
+                  <th>Generation rule</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((c) => (
+                  <tr key={c.id}>
+                    <td className="mono font-medium text-[var(--color-fg)]">
+                      {c.fqdn}
+                    </td>
+                    <td className="mono text-[var(--color-muted)]">{c.tld}</td>
+                    <td>
+                      <Badge tone={STATUS_TONE[c.status] ?? "neutral"} dot>
+                        {c.status}
+                      </Badge>
+                    </td>
+                    <td className="text-[var(--color-muted)]">
+                      {c.generationRule ?? "—"}
+                    </td>
+                    <td className="tnum text-[var(--color-muted)]">
+                      {new Date(c.updatedAt).toISOString().slice(0, 10)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );
 }
-

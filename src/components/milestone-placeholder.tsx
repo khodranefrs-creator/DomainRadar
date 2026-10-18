@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/page-shell";
+import { Badge } from "@/components/badge";
 
 export function MilestonePlaceholder({
   title,
@@ -13,20 +14,27 @@ export function MilestonePlaceholder({
 }) {
   return (
     <div>
-      <PageHeader title={title} description={description} />
-      <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-surface)] p-6 max-w-2xl">
-        <div className="text-xs uppercase tracking-wide text-[var(--color-muted)]">
-          Planned for {milestone}
+      <PageHeader eyebrow="Planned" title={title} description={description} />
+      <div className="panel max-w-3xl p-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge tone="neutral" dot>
+            {milestone}
+          </Badge>
+          <span className="text-xs text-[var(--color-muted)]">Not yet built</span>
         </div>
-        <p className="text-sm mt-2 text-[var(--color-muted)]">
-          Not implemented yet. This page intentionally shows no data rather than
-          placeholder metrics.
+        <p className="mt-4 max-w-2xl text-sm leading-relaxed text-[var(--color-muted)]">
+          This view is intentionally empty. No placeholder figures, sample charts
+          or invented metrics are shown — data appears only once a real, permitted
+          source is wired in.
         </p>
-        <ul className="mt-4 space-y-2 text-sm">
-          {planned.map((p) => (
-            <li key={p} className="flex gap-2">
-              <span className="text-[var(--color-muted)]">•</span>
-              <span>{p}</span>
+        <ul className="mt-5 grid gap-2 sm:grid-cols-2">
+          {planned.map((item) => (
+            <li
+              key={item}
+              className="flex items-start gap-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 py-3 text-sm text-[var(--color-fg)]"
+            >
+              <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-accent)]" />
+              <span>{item}</span>
             </li>
           ))}
         </ul>
