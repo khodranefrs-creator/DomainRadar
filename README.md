@@ -13,7 +13,8 @@ Two rules drive the whole project:
 
 ## Status — Milestone 2 (live RDAP availability)
 
-- Local Next.js app bound to `127.0.0.1` only. Nothing is deployed.
+- Local Next.js app bound to `127.0.0.1` only by default. Remote access requires
+  an explicit, token-gated deployment mode (see below).
 - SQLite database via Prisma (`data/domain-radar.db`).
 - Multi-TLD schema: `TldRegistry`, `DomainSearchSession`, `DomainVariantCheck`,
   candidates, evidence, sources, settings and more.
@@ -68,6 +69,44 @@ Open http://127.0.0.1:3000
 > The dependency tree resolves cleanly under a strict `npm install` / `npm ci`
 > (no `--legacy-peer-deps` or `--force` needed). `@types/node` is pinned to the
 > Node 24 line so it satisfies the peer requirements of both `vitest` and `vite`.
+
+## Deployment / remote access
+
+The app is local-first and, by default, only answers requests whose `Host` header
+is loopback (`localhost`, `127.0.0.1`, `::1`). Anything else gets
+`403 Forbidden: Domain Radar is local-only.`
+
+For personal remote access there is an explicit, opt-in **deployment mode**,
+controlled by environment variables:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `DOMAIN_RADAR_ACCESS_MODE` | `local` | `local` or `deployment`. Any other value is treated as `local`. |
+| `DOMAIN_RADAR_ACCESS_TOKEN` | — | Shared access token (HTTP Basic auth password). **Required** in deployment mode. |
+| `DOMAIN_RADAR_ACCESS_USER` | `domain-radar` | HTTP Basic auth username in deployment mode. |
+
+Deployment mode rules:
+
+- The `Host` header is **never** used as the access boundary — it is trivial to
+  spoof. Every request must present the token via HTTP Basic auth
+  (constant-time compared), or it gets `401` with a `WWW-Authenticate` challenge.
+- If deployment mode is on but `DOMAIN_RADAR_ACCESS_TOKEN` is unset, the app
+  **fails closed** with `503` instead of serving anything unauthenticated.
+- Local mode ignores the token entirely: supplying credentials never bypasses the
+  loopback guard.
+- Generate a token with `openssl rand -base64 32` and set it as a Vercel project
+  environment variable. Never commit it.
+
+Set `DOMAIN_RADAR_ACCESS_MODE=deployment` and `DOMAIN_RADAR_ACCESS_TOKEN=...` in
+the host's environment (e.g. Vercel → Project → Settings → Environment Variables),
+then redeploy.
+
+> **Database caveat.** SQLite cannot persist on serverless hosts like Vercel —
+> the `data/domain-radar.db` file is git-ignored and is not present in a fresh
+> deployment, so pages that read the database will fail even behind the access
+> gate. A real deployment needs a hosted Postgres (and the Prisma datasource
+> switched to `postgresql`). Do not enable deployment mode on a public host until
+> that is set up.
 
 ## Scripts
 

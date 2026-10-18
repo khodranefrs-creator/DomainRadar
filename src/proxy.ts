@@ -1,24 +1,42 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import {
+  decideAccess,
+  getAccessMode,
+  getUsername,
+} from "@/lib/access-control";
 
-// Local-only guard. The dev/start scripts bind to 127.0.0.1, and this proxy
-// refuses requests whose Host header is not loopback — defense in depth against
-// accidental exposure if the bind address is ever changed.
+// Access gate. Next.js 16 renamed the middleware convention to `proxy`.
 //
-// Next.js 16 renamed the middleware convention to `proxy`.
-
-const ALLOWED_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+// Default (local) mode keeps the loopback-only guard from earlier milestones.
+// Opt-in deployment mode authenticates every request with a shared token and
+// fails closed when that token is absent. The decision logic lives in
+// src/lib/access-control.ts so it can be unit tested without the Next runtime.
 
 export function proxy(request: NextRequest) {
-  const hostHeader = request.headers.get("host") ?? "";
-  const hostname = hostHeader.split(":")[0].toLowerCase();
-  if (!ALLOWED_HOSTS.has(hostname)) {
-    return new NextResponse("Forbidden: Domain Radar is local-only.", {
-      status: 403,
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-    });
+  const decision = decideAccess({
+    mode: getAccessMode(process.env),
+    hostHeader: request.headers.get("host"),
+    authorizationHeader: request.headers.get("authorization"),
+    token: process.env.DOMAIN_RADAR_ACCESS_TOKEN,
+    username: getUsername(process.env),
+  });
+
+  if (decision.ok) {
+    return NextResponse.next();
   }
-  return NextResponse.next();
+
+  const headers = new Headers({
+    "Content-Type": "text/plain; charset=utf-8",
+    "Cache-Control": "no-store",
+  });
+  if (decision.challenge) {
+    headers.set("WWW-Authenticate", decision.challenge);
+  }
+  return new NextResponse(decision.message, {
+    status: decision.status,
+    headers,
+  });
 }
 
 export const config = {
