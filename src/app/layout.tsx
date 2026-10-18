@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 import { AppChrome } from "@/components/app-shell";
 
@@ -13,14 +13,25 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const display = Instrument_Serif({
+  variable: "--font-serif",
+  weight: "400",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
-  title: "Domain Radar",
+  title: {
+    default: "Domain Radar — evidence-first domain intelligence",
+    template: "%s · Domain Radar",
+  },
   description:
-    "Evidence-first domain intelligence. RDAP-backed availability across every verified extension — nothing invented.",
+    "Investigate a domain across every verified extension. RDAP-backed availability, registry provenance, and honest uncertainty — nothing invented.",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#08090b",
+  themeColor: "#0a0b0e",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -29,8 +40,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} ${display.variable}`}
+    >
       <body>
+        <a href="#content" className="skip">
+          Skip to content
+        </a>
         <AppChrome>{children}</AppChrome>
       </body>
     </html>

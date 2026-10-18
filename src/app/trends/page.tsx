@@ -1,4 +1,7 @@
-﻿import { MilestonePlaceholder } from "@/components/milestone-placeholder";
+﻿import type { Metadata } from "next";
+import { MilestonePlaceholder } from "@/components/milestone-placeholder";
+
+export const metadata: Metadata = { title: "Trends & news" };
 
 export default function Page() {
   return (

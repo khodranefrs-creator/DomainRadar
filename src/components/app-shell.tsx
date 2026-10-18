@@ -51,6 +51,16 @@ const TABS: { href: string; label: string; icon: string }[] = [
   { href: "/sources", label: "Registry", icon: "registry" },
 ];
 
+function matchRoute(pathname: string) {
+  if (pathname === "/") return { group: "Research", item: ALL[0] };
+  const found = ALL.filter((i) => i.href !== "/" && pathname.startsWith(i.href)).sort(
+    (a, b) => b.href.length - a.href.length,
+  )[0];
+  if (!found) return { group: "Research", item: { href: pathname, label: "Not found", icon: "compass" } };
+  const group = GROUPS.find((g) => g.items.includes(found))?.label ?? "Research";
+  return { group, item: found };
+}
+
 /* ---------------------------------------------------------------- palette */
 
 function CommandPalette({ onClose }: { onClose: () => void }) {
@@ -62,9 +72,15 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
   const results = useMemo(() => {
     const term = q.trim().toLowerCase();
     const items: { key: string; label: string; sub: string; icon: string; go: () => void }[] = [];
-    const looksLikeName = /^[a-z0-9-]{2,}$/i.test(term);
-    if (looksLikeName) {
-      items.push({
+    const pushes: string[] = [];
+    const push = (i: (typeof items)[number]) => {
+      if (pushes.includes(i.key)) return;
+      pushes.push(i.key);
+      items.push(i);
+    };
+
+    if (term && /^[a-z0-9-]{2,}$/i.test(term)) {
+      push({
         key: "investigate",
         label: `Investigate “${q.trim()}”`,
         sub: "Run a live RDAP lookup across your default extensions",
@@ -84,10 +100,10 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
       ) {
         continue;
       }
-      items.push({
+      push({
         key: item.href,
         label: item.label,
-        sub: item.hint ?? (item.note ? `Planned · ${item.note}` : item.href),
+        sub: item.hint ?? (item.note ? `Planned · ${item.note}` : "Jump to page"),
         icon: item.icon,
         go: () => {
           router.push(item.href);
@@ -129,10 +145,11 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
               setActive(0);
             }}
             onKeyDown={onKeyDown}
-            placeholder="Search pages or a domain to investigate…"
-            className="h-14 flex-1 border-0 bg-transparent text-[15px] text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-4)]"
+            placeholder="Investigate a domain, or jump to a page…"
+            className="h-14 flex-1 border-0 bg-transparent font-mono text-[14.5px] text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-4)]"
             spellCheck={false}
             autoComplete="off"
+            aria-label="Command input"
           />
           <span className="kbd">esc</span>
         </div>
@@ -149,7 +166,7 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
                 data-active={i === active}
                 onMouseEnter={() => setActive(i)}
                 onClick={r.go}
-                className="palette-item rounded-lg"
+                className="palette-item"
               >
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[var(--color-line)] bg-[var(--color-bg)]">
                   <Icon name={r.icon} size={16} />
@@ -160,9 +177,24 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
                     {r.sub}
                   </span>
                 </span>
+                <Icon
+                  name="arrow"
+                  size={15}
+                  className="ml-auto shrink-0 text-[var(--color-ink-4)]"
+                />
               </button>
             ))
           )}
+        </div>
+        <div className="flex items-center gap-4 border-t border-[var(--color-line)] px-4 py-2.5 text-[11px] text-[var(--color-ink-4)]">
+          <span className="flex items-center gap-1.5">
+            <span className="kbd">↑</span>
+            <span className="kbd">↓</span> navigate
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="kbd">↵</span> open
+          </span>
+          <span className="ml-auto">Domain Radar</span>
         </div>
       </div>
     </>
@@ -173,6 +205,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const route = matchRoute(pathname);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -206,94 +239,107 @@ export function AppChrome({ children }: { children: ReactNode }) {
   }, [paletteOpen, sheetOpen]);
 
   return (
-    <div className="app">
-      <aside className="rail">
+    <div className="shell">
+      <aside className="rail max-lg:hidden">
         <div className="rail-brand">
-          <BrandMark size={26} />
+          <BrandMark size={30} />
           <div className="min-w-0">
-            <div className="text-[14px] font-semibold leading-tight tracking-tight">
+            <div className="rail-word">
               Domain Radar
-            </div>
-            <div className="text-[11px] text-[var(--color-ink-3)]">
-              Domain intelligence
+              <small>Intelligence desk</small>
             </div>
           </div>
         </div>
-        <nav className="rail-nav">
-            {GROUPS.map((group) => (
-              <div key={group.label} className="mt-2">
-                <div className="mb-1.5 px-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-[var(--color-ink-4)]">
-                  {group.label}
-                </div>
-                {group.items.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setSheetOpen(false)}
-                    data-active={pathname === item.href}
-                    className="rail-link"
-                  >
-                    <Icon name={item.icon} size={17} />
-                    <span className="truncate">{item.label}</span>
-                    {item.note ? <span className="rail-note">{item.note}</span> : null}
-                  </Link>
-                ))}
-              </div>
-            ))}
+
+        <nav className="rail-nav" aria-label="Sections">
+          {GROUPS.map((group) => (
+            <div key={group.label}>
+              <div className="rail-group">{group.label}</div>
+              {group.items.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  data-active={pathname === item.href}
+                  className="nl"
+                >
+                  <Icon name={item.icon} size={17} />
+                  <span className="truncate">{item.label}</span>
+                  {item.note ? <span className="nl-note">{item.note}</span> : null}
+                </Link>
+              ))}
+            </div>
+          ))}
         </nav>
+
         <div className="rail-foot">
-          <div className="flex items-center gap-2 text-[11px] text-[var(--color-ink-3)]">
-            <span className="relative flex h-2 w-2 text-[var(--color-accent)]">
-              <span className="ping absolute inline-flex h-2 w-2 rounded-full" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-accent)]" />
+          <div className="flex items-center gap-2 text-[11.5px] text-[var(--color-ink-3)]">
+            <span className="relative flex h-1.5 w-1.5 text-[var(--color-accent)]">
+              <span className="ping absolute inline-flex h-1.5 w-1.5 rounded-full" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" />
             </span>
             RDAP availability · live
           </div>
+          <p className="micro mt-2 max-w-[26ch]">
+            Unverified lookups are never reported as available.
+          </p>
         </div>
       </aside>
 
-      <div className="app-col">
+      <div className="shell-col">
         <header className="topbar">
-          <div className="flex items-center gap-3 md:hidden">
-            <BrandMark size={24} />
-            <span className="text-[13.5px] font-semibold tracking-tight">Domain Radar</span>
+          <div className="flex items-center gap-2.5 lg:hidden">
+            <BrandMark size={26} />
+            <span className="font-display text-[15px] tracking-tight">Domain Radar</span>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setPaletteOpen(true)}
-            className="searchbar-btn hidden w-full max-w-md md:flex"
-          >
-            <Icon name="search" size={16} />
-            <span>Search pages or investigate a domain…</span>
-            <span className="kbd ml-auto">⌘K</span>
-          </button>
+          <div className="crumb max-lg:hidden">
+            <span>{route.group}</span>
+            <Icon name="chevron" size={13} className="text-[var(--color-ink-4)]" />
+            <b>{route.item.label}</b>
+          </div>
 
-          <div className="md:ml-auto">
+          <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
               onClick={() => setPaletteOpen(true)}
-              className="icon-btn md:hidden"
-              aria-label="Search"
+              className="cmd-btn hidden lg:flex"
+              aria-label="Open command menu"
+            >
+              <Icon name="search" size={15} />
+              <span className="w-[210px] text-left">Search or investigate…</span>
+              <span className="kbd">⌘K</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              className="icon-btn lg:hidden"
+              aria-label="Search or investigate"
             >
               <Icon name="search" size={18} />
             </button>
+            <Link
+              href="/scanner"
+              className="btn btn-accent btn-sm max-sm:hidden"
+              aria-label="Start an investigation"
+            >
+              <Icon name="investigate" size={15} />
+              Investigate
+            </Link>
           </div>
-
-          <Link
-            href="/sources"
-            className="hidden items-center gap-2 text-[12.5px] text-[var(--color-ink-2)] transition-colors hover:text-[var(--color-ink)] md:flex"
-          >
-            <Icon name="registry" size={15} />
-            Registry
-          </Link>
         </header>
 
-        <main className="app-main">{children}</main>
+        <main className="main" id="content">
+          <div className="main-narrow">{children}</div>
+        </main>
 
-        <footer className="border-t border-[var(--color-line)] px-6 py-5 text-[11.5px] leading-relaxed text-[var(--color-ink-3)] md:px-10">
-          Domain Radar · evidence-first domain intelligence · an unverified lookup is
-          never presented as available · nothing is invented
+        <footer className="border-t border-[var(--color-line)] px-6 py-5 text-[11.5px] leading-relaxed text-[var(--color-ink-4)] lg:px-10">
+          <div className="main-narrow flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="text-[var(--color-ink-3)]">Domain Radar</span>
+            <span aria-hidden>·</span>
+            <span>Evidence-first domain intelligence</span>
+            <span aria-hidden>·</span>
+            <span>Nothing invented; uncertainty is stated</span>
+          </div>
         </footer>
       </div>
 
@@ -305,12 +351,12 @@ export function AppChrome({ children }: { children: ReactNode }) {
             data-active={pathname === item.href}
             className="tab"
           >
-            <Icon name={item.icon} size={20} />
+            <Icon name={item.icon} size={19} />
             {item.label}
           </Link>
         ))}
         <button type="button" className="tab" onClick={() => setSheetOpen(true)}>
-          <Icon name="menu" size={20} />
+          <Icon name="menu" size={19} />
           More
         </button>
       </nav>
@@ -318,34 +364,33 @@ export function AppChrome({ children }: { children: ReactNode }) {
       {sheetOpen ? (
         <>
           <div className="scrim" onClick={() => setSheetOpen(false)} aria-hidden />
-          <div className="sheet md:hidden" role="dialog" aria-modal="true" aria-label="More">
-            <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-[var(--color-line-2)]" />
+          <div className="sheet lg:hidden" role="dialog" aria-modal="true" aria-label="More">
+            <div className="sheet-grip" />
             <button
               type="button"
               onClick={() => {
                 setSheetOpen(false);
                 setPaletteOpen(true);
               }}
-              className="mb-2 flex w-full items-center gap-3 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] px-4 py-3 text-left text-[var(--color-ink-2)]"
+              className="mb-2 flex w-full items-center gap-3 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] px-4 py-3 text-left text-[13px] text-[var(--color-ink-2)]"
             >
               <Icon name="search" size={17} />
               Search or investigate a domain
             </button>
             {GROUPS.map((group) => (
-              <div key={group.label} className="mt-2">
-                <div className="px-2 py-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink-4)]">
-                  {group.label}
-                </div>
+              <div key={group.label}>
+                <div className="rail-group">{group.label}</div>
                 {group.items.map((item) => (
                   <Link
                     key={item.href}
                     href={item.href}
                     data-active={pathname === item.href}
-                    className="rail-link"
+                    className="nl"
+                    onClick={() => setSheetOpen(false)}
                   >
                     <Icon name={item.icon} size={17} />
                     <span className="truncate">{item.label}</span>
-                    {item.note ? <span className="rail-note">{item.note}</span> : null}
+                    {item.note ? <span className="nl-note">{item.note}</span> : null}
                   </Link>
                 ))}
               </div>

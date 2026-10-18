@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Badge } from "@/components/badge";
 import { Callout } from "@/components/ui";
@@ -81,6 +82,8 @@ function clean(value: string) {
     .split(".")[0];
 }
 
+type SaveState = "saving" | "saved" | "error";
+
 export function ScannerView() {
   const params = useSearchParams();
   const initialName = clean(params.get("name") ?? "");
@@ -91,12 +94,18 @@ export function ScannerView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SearchResponse | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [saved, setSaved] = useState<Record<string, SaveState>>({});
+  const [notice, setNotice] = useState<string | null>(null);
 
   const runSearch = useCallback(async (sld: string, picks: string[]) => {
     if (!sld || picks.length === 0) return;
     setLoading(true);
     setError(null);
     setResult(null);
+    setSaved({});
+    setExpanded(null);
+    setNotice(null);
     try {
       const res = await fetch("/api/search", {
         method: "POST",
@@ -123,9 +132,7 @@ export function ScannerView() {
       .then((data: { tlds: TldRow[] }) => {
         if (cancelled) return;
         setTlds(data.tlds);
-        const core = data.tlds
-          .filter((t) => CORE.includes(t.tld))
-          .map((t) => t.tld);
+        const core = data.tlds.filter((t) => CORE.includes(t.tld)).map((t) => t.tld);
         setSelected(core);
         if (initialName) void runSearch(initialName, core);
       })
@@ -143,26 +150,95 @@ export function ScannerView() {
     );
   }
 
-  const verified = tlds.filter((t) => t.status === "AVAILABLE");
+  const verified = useMemo(() => tlds.filter((t) => t.status === "AVAILABLE"), [tlds]);
+  const noRecord = useMemo(
+    () => (result?.variants ?? []).filter((v) => v.status === "NOT_FOUND"),
+    [result],
+  );
+
+  async function stageOne(fqdn: string, detail: string) {
+    setSaved((s) => ({ ...s, [fqdn]: "saving" }));
+    try {
+      const res = await fetch("/api/candidates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          domain: fqdn,
+          status: "CANDIDATE",
+          generationRule: "rdap-investigation",
+          notes: `Staged from RDAP investigation · ${detail}`,
+        }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      setSaved((s) => ({ ...s, [fqdn]: "saved" }));
+    } catch {
+      setSaved((s) => ({ ...s, [fqdn]: "error" }));
+    }
+  }
+
+  async function stageAllNoRecord() {
+    setNotice(null);
+    for (const v of noRecord) {
+      if (saved[v.fqdn] === "saved") continue;
+      // Sequential: the API is rate limited per IP, and this keeps the
+      // request pattern legible and kind to the registries.
+      await stageOne(
+        v.fqdn,
+        [v.status, v.lastCheckedAt ? new Date(v.lastCheckedAt).toISOString() : null]
+          .filter(Boolean)
+          .join(" · "),
+      );
+    }
+    setNotice(`${noRecord.length} no-record names staged in the pipeline.`);
+  }
+
+  function exportCsv() {
+    if (!result) return;
+    const head = ["domain", "registry_state", "provider", "http_status", "checked_at", "detail"];
+    const lines = result.variants.map((v) =>
+      [
+        v.fqdn,
+        v.status,
+        v.providerHost ?? v.source ?? "",
+        v.httpStatus ?? "",
+        v.lastCheckedAt ?? "",
+        v.detail,
+      ]
+        .map((c) => `"${String(c).replace(/"/g, '""')}"`)
+        .join(","),
+    );
+    const blob = new Blob([[head.join(","), ...lines].join("\n")], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `domain-radar-${result.sld}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const verifiedTlds = tlds.filter((t) => t.status === "AVAILABLE");
+  const otherTlds = tlds.filter((t) => t.status !== "AVAILABLE");
 
   return (
-    <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(320px,380px)_1fr]">
+    <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]">
       <form
-        className="panel p-5 lg:sticky lg:top-[76px]"
+        className="panel h-fit p-5 lg:sticky lg:top-[78px]"
         onSubmit={(e) => {
           e.preventDefault();
           void runSearch(clean(name), selected);
         }}
       >
-        <div className="eyebrow mb-3">Query</div>
-        <label htmlFor="sld" className="field-label">
-          Second-level label
+        <div className="eyebrow mb-3">The name</div>
+        <label htmlFor="sld" className="sr-only">
+          Second-level domain label
         </label>
         <input
           id="sld"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="input mono"
+          className="input mono text-[15px]"
           placeholder="agentcapability"
           autoComplete="off"
           spellCheck={false}
@@ -170,22 +246,32 @@ export function ScannerView() {
         <button
           type="submit"
           disabled={loading || selected.length === 0 || name.trim().length === 0}
-          className="btn btn-primary mt-3 w-full"
+          className="btn btn-accent mt-2.5 w-full"
         >
-          {loading ? "Checking registry…" : "Check availability"}
+          {loading ? (
+            <>
+              <Icon name="refresh" size={15} className="spin" />
+              Checking registry…
+            </>
+          ) : (
+            <>
+              <Icon name="investigate" size={15} />
+              Check {selected.length} extension{selected.length === 1 ? "" : "s"}
+            </>
+          )}
         </button>
 
-        <div className="mt-6 flex items-center justify-between">
+        <div className="mt-5 flex items-center justify-between border-t border-[var(--color-line)] pt-4">
           <span className="eyebrow">Extensions</span>
           <span className="mono text-[11px] text-[var(--color-ink-3)]">
             {selected.length}/{tlds.length}
           </span>
         </div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
           <button
             type="button"
             className="btn btn-quiet btn-sm"
-            onClick={() => setSelected(verified.map((t) => t.tld))}
+            onClick={() => setSelected(verifiedTlds.map((t) => t.tld))}
           >
             All verified
           </button>
@@ -205,11 +291,9 @@ export function ScannerView() {
           </button>
         </div>
 
-        <div className="mt-3 space-y-3">
+        <div className="mt-4 space-y-3.5">
           <div>
-            <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-[var(--color-ink-4)]">
-              Verified endpoints
-            </div>
+            <div className="micro mb-1.5">Verified endpoint</div>
             <div className="flex flex-wrap gap-1.5">
               {verified.map((t) => (
                 <button
@@ -225,48 +309,106 @@ export function ScannerView() {
               ))}
             </div>
           </div>
-          {tlds.some((t) => t.status !== "AVAILABLE") ? (
+          {otherTlds.length > 0 ? (
             <div>
-              <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-[var(--color-ink-4)]">
-                No verified endpoint
-              </div>
+              <div className="micro mb-1.5">No verified endpoint</div>
               <div className="flex flex-wrap gap-1.5">
-                {tlds
-                  .filter((t) => t.status !== "AVAILABLE")
-                  .map((t) => (
-                    <button
-                      type="button"
-                      key={t.tld}
-                      onClick={() => toggle(t.tld)}
-                      aria-pressed={selected.includes(t.tld)}
-                      className="chip opacity-70"
-                      title={`${t.displayName} — no verified RDAP endpoint, reported as unsupported`}
-                    >
-                      {t.tld}
-                    </button>
-                  ))}
+                {otherTlds.map((t) => (
+                  <button
+                    type="button"
+                    key={t.tld}
+                    onClick={() => toggle(t.tld)}
+                    aria-pressed={selected.includes(t.tld)}
+                    className="chip opacity-70"
+                    title={`${t.displayName} — no verified RDAP endpoint; recorded as unsupported`}
+                  >
+                    {t.tld}
+                  </button>
+                ))}
               </div>
             </div>
           ) : null}
         </div>
-        <p className="mt-3 text-[11px] leading-relaxed text-[var(--color-ink-4)]">
-          Extensions without a verified RDAP endpoint are checked as
-          &ldquo;unsupported&rdquo; — never guessed.
+        <p className="micro mt-4">
+          Extensions without a verified RDAP endpoint are recorded as unsupported —
+          never guessed.
         </p>
       </form>
 
-      <div className="min-w-0 space-y-6">
-        {error ? <Callout tone="bad" title="Lookup failed">{error}</Callout> : null}
+      <div className="min-w-0">
+        {error ? (
+          <div className="mb-6">
+            <Callout tone="bad" title="Lookup failed" icon="alert">
+              {error}
+            </Callout>
+          </div>
+        ) : null}
 
         {loading ? (
-          <div className="space-y-3">
-            <div className="skeleton h-[92px]" />
+          <div className="space-y-4">
+            <div className="panel-flush">
+              <div className="flex items-center gap-2.5 px-5 py-4 text-[12.5px] text-[var(--color-ink-2)]">
+                <Icon name="refresh" size={15} className="spin text-[var(--color-accent)]" />
+                Contacting {selected.length} registries over RDAP…
+              </div>
+              <dl className="statline rounded-none border-0 border-t border-[var(--color-line)]">
+                <div><dt>Checked</dt><dd>—</dd></div>
+                <div><dt>Registered</dt><dd>—</dd></div>
+                <div><dt>No record*</dt><dd>—</dd></div>
+              </dl>
+            </div>
             <div className="skeleton h-64" />
           </div>
         ) : result ? (
-          <>
-            <div className="panel overflow-hidden">
-              <div className="grid grid-cols-2 gap-px bg-[var(--color-line)] sm:grid-cols-4 lg:grid-cols-7">
+          <div className="space-y-4">
+            <section className="dossier">
+              <div className="dossier-head">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <h2 className="dossier-domain">{result.sld}</h2>
+                    <Badge
+                      dot
+                      tone={
+                        result.status === "COMPLETED"
+                          ? "good"
+                          : result.status === "FAILED"
+                            ? "bad"
+                            : "warn"
+                      }
+                    >
+                      {result.status.toLowerCase()}
+                    </Badge>
+                    {result.registeredCount > 0 ? (
+                      <span className="micro">
+                        taken in{" "}
+                        <b className="text-[var(--color-ink-2)]">
+                          {result.registeredCount}
+                        </b>{" "}
+                        of {result.checkedCount} checked
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="micro mt-1.5">{result.note}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={exportCsv} className="btn btn-ghost btn-sm">
+                    <Icon name="download" size={14} />
+                    CSV
+                  </button>
+                  {noRecord.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => void stageAllNoRecord()}
+                      className="btn btn-primary btn-sm"
+                    >
+                      <Icon name="plus" size={14} />
+                      Stage {noRecord.length} no-record
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              <dl className="statline rounded-none border-0 border-b border-[var(--color-line)]">
                 {[
                   ["Requested", result.requestedCount],
                   ["Checked", result.checkedCount],
@@ -276,95 +418,164 @@ export function ScannerView() {
                   ["Unresolved", result.unresolvedCount],
                   ["Errors", result.errorCount],
                 ].map(([label, value]) => (
-                  <div key={String(label)} className="bg-[var(--color-panel)] px-3.5 py-3">
-                    <div className="eyebrow !text-[10px]">{label}</div>
-                    <div className="mono mt-1.5 text-[20px] leading-none text-[var(--color-ink)]">
-                      {value}
-                    </div>
+                  <div key={String(label)}>
+                    <dt>{label}</dt>
+                    <dd>{value}</dd>
                   </div>
                 ))}
-              </div>
-            </div>
+              </dl>
 
-            <section className="panel-flush">
-              <div className="panel-head">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2.5">
-                    <span className="mono text-[13.5px] font-medium text-[var(--color-ink)]">
-                      {result.sld}
-                    </span>
-                    <Badge
-                      tone={
-                        result.status === "COMPLETED"
-                          ? "good"
-                          : result.status === "FAILED"
-                            ? "bad"
-                            : "warn"
-                      }
-                      dot
-                    >
-                      {result.status}
-                    </Badge>
-                  </div>
-                  <p className="mt-0.5 text-[11.5px] text-[var(--color-ink-3)]">
-                    {result.note}
-                  </p>
+              {notice ? (
+                <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-line)] px-5 py-2.5 text-[12px] text-[var(--color-ok)]">
+                  <Icon name="check" size={14} />
+                  {notice}
+                  <Link href="/candidates" className="link ml-auto">
+                    Open pipeline →
+                  </Link>
                 </div>
-              </div>
+              ) : null}
+
               <div className="grid-wrap">
                 <table className="grid-table">
                   <thead>
                     <tr>
+                      <th className="expand" aria-label="Expand" />
                       <th>Domain</th>
                       <th>Registry state</th>
-                      <th>Source</th>
+                      <th>Registry</th>
                       <th className="num">HTTP</th>
-                      <th>Checked</th>
-                      <th>Detail</th>
+                      <th className="text-right">Evidence</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {result.variants.map((v) => (
-                      <tr key={v.fqdn}>
-                        <td className="primary mono">{v.fqdn}</td>
-                        <td>
-                          <Badge tone={STATUS_TONE[v.status] ?? "unknown"} dot>
-                            {STATUS_LABEL[v.status] ?? v.status}
-                          </Badge>
-                        </td>
-                        <td className="mono text-[11.5px]">
-                          {v.providerHost ?? v.source ?? "—"}
-                        </td>
-                        <td className="num">{v.httpStatus ?? "—"}</td>
-                        <td className="faint">
-                          {v.cached
-                            ? "cached"
-                            : v.lastCheckedAt
-                              ? new Date(v.lastCheckedAt).toISOString().slice(11, 19)
-                              : "—"}
-                        </td>
-                        <td className="max-w-[280px] text-[12px]">{v.detail}</td>
-                      </tr>
-                    ))}
+                    {result.variants.map((v) => {
+                      const open = expanded === v.fqdn;
+                      const state = saved[v.fqdn];
+                      return [
+                        <tr
+                          key={v.fqdn}
+                          onClick={() => setExpanded(open ? null : v.fqdn)}
+                          className="cursor-pointer"
+                        >
+                          <td className="expand">
+                            <button
+                              type="button"
+                              aria-expanded={open}
+                              aria-label={open ? `Hide evidence for ${v.fqdn}` : `Show evidence for ${v.fqdn}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpanded(open ? null : v.fqdn);
+                              }}
+                              className="grid h-7 w-7 place-items-center rounded-md border border-[var(--color-line-2)] text-[var(--color-ink-3)] transition-colors hover:border-[var(--color-line-3)] hover:text-[var(--color-ink)] max-sm:h-11 max-sm:w-11"
+                            >
+                              <Icon name="chevron" size={13} className={open ? "rotate-90 transition-transform" : "transition-transform"} />
+                            </button>
+                          </td>
+                          <td className="primary mono">{v.fqdn}</td>
+                          <td>
+                            <Badge tone={STATUS_TONE[v.status] ?? "unknown"} dot>
+                              {STATUS_LABEL[v.status] ?? v.status}
+                            </Badge>
+                          </td>
+                          <td className="mono text-[11.5px]">
+                            {v.providerHost ?? v.source ?? "—"}
+                          </td>
+                          <td className="num">{v.httpStatus ?? "—"}</td>
+                          <td className="text-right">
+                            {v.status === "NOT_FOUND" ? (
+                              <button
+                                type="button"
+                                className="btn btn-quiet btn-sm"
+                                disabled={state === "saving" || state === "saved"}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void stageOne(
+                                    v.fqdn,
+                                    [v.status, v.lastCheckedAt].filter(Boolean).join(" · "),
+                                  );
+                                }}
+                              >
+                                {state === "saved" ? (
+                                  <>
+                                    <Icon name="check" size={13} />
+                                    Staged
+                                  </>
+                                ) : state === "error" ? (
+                                  "Retry"
+                                ) : (
+                                  <>
+                                    <Icon name="plus" size={13} />
+                                    Stage
+                                  </>
+                                )}
+                              </button>
+                            ) : (
+                              <span className="faint text-[11px]">
+                                {v.cached ? "cached" : "live"}
+                              </span>
+                            )}
+                          </td>
+                        </tr>,
+                        open ? (
+                          <tr key={`${v.fqdn}-detail`}>
+                            <td colSpan={6} className="row-detail">
+                              <dl className="kv">
+                                <dt>Evidence</dt>
+                                <dd>{v.detail}</dd>
+                                <dt>Provider host</dt>
+                                <dd className="mono">{v.providerHost ?? "—"}</dd>
+                                <dt>Source key</dt>
+                                <dd className="mono">{v.sourceKey ?? "—"}</dd>
+                                <dt>Request</dt>
+                                <dd className="mono">
+                                  {v.requestUrl ? (
+                                    v.requestUrl
+                                  ) : (
+                                    <span className="faint">
+                                      not recorded for this row
+                                    </span>
+                                  )}
+                                </dd>
+                                <dt>HTTP status</dt>
+                                <dd className="mono">{v.httpStatus ?? "—"}</dd>
+                                <dt>Error kind</dt>
+                                <dd className="mono">{v.errorKind ?? "none"}</dd>
+                                <dt>Checked at</dt>
+                                <dd className="mono">
+                                  {v.lastCheckedAt
+                                    ? new Date(v.lastCheckedAt).toISOString()
+                                    : "—"}
+                                </dd>
+                                <dt>Cache</dt>
+                                <dd>{v.cached ? "served from cache" : "fresh request"}</dd>
+                              </dl>
+                            </td>
+                          </tr>
+                          ) : null,
+                      ];
+                    })}
                   </tbody>
                 </table>
               </div>
             </section>
-            <p className="text-[11px] text-[var(--color-ink-4)]">* {result.note}</p>
-          </>
+            <p className="micro max-w-[70ch]">
+              * {result.note} A “no record” result is the start of research, not a
+              purchase decision.
+            </p>
+          </div>
         ) : (
-          <section className="panel-flush">
-            <div className="empty">
+          <section className="panel-flush h-full">
+            <div className="empty min-h-[320px]">
               <div className="empty-icon">
                 <Icon name="investigate" size={20} />
               </div>
               <p className="text-[13.5px] font-medium text-[var(--color-ink)]">
-                {initialName ? `No result for “${initialName}”` : "Nothing investigated yet"}
+                {initialName ? `Nothing returned for “${initialName}”` : "Ready when you are"}
               </p>
               <p className="max-w-sm text-[12px] leading-relaxed text-[var(--color-ink-3)]">
-                Enter a second-level label and choose extensions to run a live
-                RDAP check. Every row records its registry, HTTP status and the
-                exact response.
+                Pick extensions and run a live RDAP check. Every row keeps its
+                registry, HTTP status, request URL and raw response — inspect any
+                of them.
               </p>
             </div>
           </section>

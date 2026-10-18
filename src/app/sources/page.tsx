@@ -1,12 +1,14 @@
-﻿import { Suspense } from "react";
+﻿import type { Metadata } from "next";
+import { Suspense } from "react";
 import { prisma } from "@/lib/db";
 import { tldRepository } from "@/lib/repository";
 import { Badge } from "@/components/badge";
-import { Note, Panel, PageHeader } from "@/components/ui";
+import { Icon } from "@/components/icons";
+import { Note, PageHeader, StatLine } from "@/components/ui";
 import { SourceStatus, TldStatus } from "@/lib/enums";
 
-export const metadata = {
-  title: "Registry · Domain Radar",
+export const metadata: Metadata = {
+  title: "Registry",
 };
 
 export default function SourcesPage() {
@@ -14,8 +16,8 @@ export default function SourcesPage() {
     <div>
       <PageHeader
         eyebrow="Registry"
-        title="Extensions & sources"
-        lead="Exactly which extensions can be checked, and every external provider with its permitted-use notes and current status. A planned adapter is never shown as operational."
+        title="What can actually be checked"
+        lead="Every extension Domain Radar can query, and every external provider behind it — with status, rate limits and permitted-use notes. A planned adapter is never shown as operational."
       />
       <Suspense fallback={<RegistrySkeleton />}>
         <RegistryData />
@@ -27,33 +29,37 @@ export default function SourcesPage() {
 function RegistrySkeleton() {
   return (
     <div className="space-y-6">
-      <div className="skeleton h-[92px]" />
+      <div className="skeleton h-[54px]" />
       <div className="skeleton h-72" />
       <div className="skeleton h-72" />
     </div>
   );
 }
 
-const TLD_TONE: Record<
-  string,
-  "neutral" | "good" | "warn" | "bad" | "info" | "unknown"
-> = {
+type Tone = Parameters<typeof Badge>[0]["tone"];
+
+const TLD_TONE: Record<string, Tone> = {
   AVAILABLE: "good",
   NEEDS_VERIFICATION: "warn",
   DISABLED: "bad",
   UNSUPPORTED: "unknown",
 };
 
-const SRC_TONE: Record<
-  string,
-  "neutral" | "good" | "warn" | "bad" | "info" | "unknown"
-> = {
+const SRC_TONE: Record<string, Tone> = {
   AVAILABLE: "good",
-  MANUAL_ONLY: "warn",
+  MANUAL_ONLY: "info",
   DISABLED: "bad",
   RATE_LIMITED: "warn",
   NEEDS_CONFIGURATION: "warn",
 };
+
+function titleCase(value: string) {
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
 
 async function RegistryData() {
   const [tlds, sources] = await Promise.all([
@@ -61,90 +67,96 @@ async function RegistryData() {
     prisma.source.findMany({ orderBy: { name: "asc" } }),
   ]);
 
-  const verifiedTlds = tlds.filter((t) => t.status === TldStatus.AVAILABLE).length;
-  const unsupportedTlds = tlds.filter(
-    (t) => t.status === TldStatus.UNSUPPORTED,
-  ).length;
-  const operational = sources.filter(
-    (s) => s.status === SourceStatus.AVAILABLE,
-  ).length;
+  const available = tlds.filter((t) => t.status === TldStatus.AVAILABLE);
+  const unsupported = tlds.filter((t) => t.status === TldStatus.UNSUPPORTED);
+  const needing = tlds.filter((t) => t.status === TldStatus.NEEDS_VERIFICATION);
+  const operational = sources.filter((s) => s.status === SourceStatus.AVAILABLE).length;
+
+  const sorted = [...tlds].sort(
+    (a, b) => Number(b.status === TldStatus.AVAILABLE) - Number(a.status === TldStatus.AVAILABLE),
+  );
 
   return (
     <div className="space-y-6">
-      <div className="panel overflow-hidden">
-        <div className="grid grid-cols-2 gap-px bg-[var(--color-line)] lg:grid-cols-4">
-          {[
-            ["Extensions tracked", tlds.length],
-            ["Verified endpoints", verifiedTlds],
-            ["Explicitly unsupported", unsupportedTlds],
-            ["Sources operational", `${operational}/${sources.length}`],
-          ].map(([label, value]) => (
-            <div key={String(label)} className="bg-[var(--color-panel)] px-5 py-4">
-              <div className="eyebrow">{label}</div>
-              <div className="mono mt-2.5 text-[24px] leading-none text-[var(--color-ink)]">
-                {value}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <StatLine
+        items={[
+          { label: "Extensions tracked", value: tlds.length },
+          { label: "Queryable now", value: available.length, tone: "accent" },
+          { label: "Unsupported", value: unsupported.length },
+          { label: "Needs verification", value: needing.length },
+          { label: "Sources operational", value: `${operational}/${sources.length}` },
+        ]}
+      />
 
-      <Panel
-        icon="registry"
-        title="TLD registry"
-        note="rdapBaseUrl is confirmed with a live request; extensions without one are explicitly unsupported"
-        actions={
-          <span className="mono text-[11px] text-[var(--color-ink-3)]">
-            {tlds.length} extensions
+      <section className="panel-flush">
+        <div className="panel-head">
+          <div className="min-w-0">
+            <h2 className="panel-title">
+              <Icon name="globe" size={15} />
+              Extensions
+            </h2>
+            <p className="panel-note">
+              Queryable first · each base URL is confirmed by a live request before
+              the extension is marked available
+            </p>
+          </div>
+          <span className="mono text-[11px] text-[var(--color-ink-4)]">
+            {tlds.length} rows
           </span>
-        }
-      >
+        </div>
         <div className="grid-wrap">
           <table className="grid-table">
             <thead>
               <tr>
-                <th>TLD</th>
+                <th>Extension</th>
                 <th>Status</th>
                 <th>Registry</th>
                 <th>RDAP base</th>
-                <th>Verified</th>
-                <th>Notes</th>
+                <th className="text-right">Verified</th>
+                <th className="max-md:hidden">Notes</th>
               </tr>
             </thead>
             <tbody>
-              {tlds.map((t) => (
+              {sorted.map((t) => (
                 <tr key={t.id}>
                   <td className="primary mono">{t.tld}</td>
                   <td>
                     <Badge tone={TLD_TONE[t.status] ?? "unknown"} dot>
-                      {t.status}
+                      {titleCase(t.status)}
                     </Badge>
                   </td>
-                  <td>{t.registryName ?? "—"}</td>
-                  <td className="mono text-[11.5px]">{t.rdapBaseUrl ?? "—"}</td>
-                  <td className="faint">
-                    {t.verifiedAt
-                      ? new Date(t.verifiedAt).toISOString().slice(0, 10)
-                      : "—"}
+                  <td className="max-md:hidden">{t.registryName ?? "—"}</td>
+                  <td className="mono max-w-[300px] truncate text-[11.5px]">
+                    {t.rdapBaseUrl ?? "—"}
                   </td>
-                  <td className="max-w-[320px] text-[12px]">{t.notes ?? "—"}</td>
+                  <td className="text-right faint mono text-[11px]">
+                    {t.verifiedAt ? new Date(t.verifiedAt).toISOString().slice(0, 10) : "—"}
+                  </td>
+                  <td className="max-w-[340px] text-[12px] max-lg:hidden">
+                    {t.notes ?? "—"}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </Panel>
+      </section>
 
-      <Panel
-        icon="spark"
-        title="Source registry"
-        note="External providers with permitted-use notes, rate limits and current status"
-        actions={
-          <span className="mono text-[11px] text-[var(--color-ink-3)]">
-            {sources.length} sources
+      <section className="panel-flush">
+        <div className="panel-head">
+          <div className="min-w-0">
+            <h2 className="panel-title">
+              <Icon name="layers" size={15} />
+              Sources
+            </h2>
+            <p className="panel-note">
+              Providers with rate limits, attribution and permitted-use notes
+            </p>
+          </div>
+          <span className="mono text-[11px] text-[var(--color-ink-4)]">
+            {sources.length} rows
           </span>
-        }
-      >
+        </div>
         <div className="grid-wrap">
           <table className="grid-table">
             <thead>
@@ -152,9 +164,9 @@ async function RegistryData() {
                 <th>Source</th>
                 <th>Kind</th>
                 <th>Status</th>
-                <th className="num">Rate limit</th>
-                <th>Attribution</th>
-                <th>Permitted use</th>
+                <th className="text-right">Rate limit</th>
+                <th className="max-md:hidden">Attribution</th>
+                <th className="max-lg:hidden">Permitted use</th>
               </tr>
             </thead>
             <tbody>
@@ -164,14 +176,23 @@ async function RegistryData() {
                   <td className="mono text-[11.5px]">{s.kind}</td>
                   <td>
                     <Badge tone={SRC_TONE[s.status] ?? "unknown"} dot>
-                      {s.status}
+                      {titleCase(s.status)}
                     </Badge>
                   </td>
                   <td className="num">
                     {s.rateLimitPerMinute ? `${s.rateLimitPerMinute}/min` : "n/a"}
                   </td>
-                  <td>{s.attributionRequired ? "Required" : "—"}</td>
-                  <td className="max-w-[420px] text-[12px]">
+                  <td className="max-md:hidden">
+                    {s.attributionRequired ? (
+                      <span className="status text-[var(--color-warn)]">
+                        <span className="dot bg-[var(--color-warn)]" aria-hidden />
+                        Required
+                      </span>
+                    ) : (
+                      <span className="faint">Not required</span>
+                    )}
+                  </td>
+                  <td className="max-w-[440px] text-[12px] max-lg:hidden">
                     {s.permittedUseNotes ?? "—"}
                   </td>
                 </tr>
@@ -179,12 +200,13 @@ async function RegistryData() {
             </tbody>
           </table>
         </div>
-      </Panel>
+      </section>
 
       <Note>
-        A status of AVAILABLE means a live request has succeeded against the
-        provider. Planners and adapters that are not yet wired in are listed as
-        such and never implied to be operational.
+        AVAILABLE means a live request has succeeded against the provider.
+        Adapters that are not wired in are listed with their true status and never
+        implied to be operational. Attribution requirements are surfaced here before
+        any data is reused.
       </Note>
     </div>
   );

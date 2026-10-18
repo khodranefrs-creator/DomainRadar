@@ -1,9 +1,10 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { PageHeader } from "@/components/ui";
 import { ScannerView } from "./scanner-view";
 
-export const metadata = {
-  title: "Investigate · Domain Radar",
+export const metadata: Metadata = {
+  title: "Investigate",
 };
 
 export default function ScannerPage() {
@@ -11,8 +12,8 @@ export default function ScannerPage() {
     <div>
       <PageHeader
         eyebrow="Investigate"
-        title="Registry lookup"
-        lead="Live RDAP lookups across the extensions you select. RDAP reports registry state only — “Not found” means no registry record was returned, it is not proof a domain is available to register."
+        title="A name, against every registry"
+        lead="Choose the extensions to query and run a live RDAP check. RDAP reports registry state only — “no record” means nothing was returned, not that the domain is available to register."
       />
       <Suspense fallback={<ScannerSkeleton />}>
         <ScannerView />
@@ -23,7 +24,7 @@ export default function ScannerPage() {
 
 function ScannerSkeleton() {
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(320px,380px)_1fr]">
+    <div className="grid gap-6 lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]">
       <div className="skeleton h-[420px]" />
       <div className="skeleton h-[420px]" />
     </div>

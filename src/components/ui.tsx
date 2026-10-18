@@ -33,19 +33,22 @@ export function PageHeader({
   title,
   lead,
   actions,
+  aside,
 }: {
   eyebrow?: string;
   title: string;
   lead?: string;
   actions?: ReactNode;
+  aside?: ReactNode;
 }) {
   return (
-    <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-      <div className="min-w-0 max-w-[68ch]">
+    <header className="mb-7 flex flex-col gap-5 border-b border-[var(--color-line)] pb-6 lg:flex-row lg:items-end lg:justify-between">
+      <div className="min-w-0">
         {eyebrow ? <div className="eyebrow mb-2.5">{eyebrow}</div> : null}
         <h1 className="page-title">{title}</h1>
         {lead ? <p className="lede mt-3">{lead}</p> : null}
       </div>
+      {aside ? <div className="shrink-0">{aside}</div> : null}
       {actions ? (
         <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
       ) : null}
@@ -76,19 +79,13 @@ export function Panel({
         <div className="panel-head">
           <div className="flex min-w-0 items-center gap-2.5">
             {icon ? (
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-[var(--color-line)] text-[var(--color-ink-2)]">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-[var(--color-line)] text-[var(--color-ink-3)]">
                 <Icon name={icon} size={15} />
               </span>
             ) : null}
             <div className="min-w-0">
-              <h2 className="text-[13.5px] font-semibold tracking-tight text-[var(--color-ink)]">
-                {title}
-              </h2>
-              {note ? (
-                <p className="mt-0.5 truncate text-[11.5px] text-[var(--color-ink-3)]">
-                  {note}
-                </p>
-              ) : null}
+              <h2 className="panel-title">{title}</h2>
+              {note ? <p className="panel-note">{note}</p> : null}
             </div>
           </div>
           {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
@@ -99,30 +96,23 @@ export function Panel({
   );
 }
 
-export function Stat({
-  label,
-  value,
-  hint,
-  tone = "neutral",
+/** A single dense line of real facts — the replacement for KPI card grids. */
+export function StatLine({
+  items,
+  className = "",
 }: {
-  label: string;
-  value: ReactNode;
-  hint?: ReactNode;
-  tone?: Tone;
+  items: { label: string; value: ReactNode; tone?: Tone }[];
+  className?: string;
 }) {
   return (
-    <div className="panel relative overflow-hidden px-4 py-4">
-      <span
-        className="absolute inset-y-0 left-0 w-[3px]"
-        style={{ background: toneVar(tone) }}
-        aria-hidden
-      />
-      <div className="eyebrow">{label}</div>
-      <div className="stat-lg mt-2.5">{value}</div>
-      {hint ? (
-        <div className="mt-1.5 text-[11.5px] text-[var(--color-ink-3)]">{hint}</div>
-      ) : null}
-    </div>
+    <dl className={`statline ${className}`}>
+      {items.map((it, i) => (
+        <div key={i}>
+          <dt>{it.label}</dt>
+          <dd style={{ color: it.tone ? toneVar(it.tone) : undefined }}>{it.value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -156,27 +146,26 @@ export function Empty({
 export function Callout({
   tone = "warn",
   title,
+  icon = "shield",
   children,
 }: {
   tone?: Tone;
   title?: string;
+  icon?: string;
   children: ReactNode;
 }) {
   const c = toneVar(tone);
   return (
     <div
-      className="rounded-[10px] border px-4 py-3 text-[12.5px] leading-relaxed"
+      className="rounded-[11px] border px-4 py-3 text-[12.5px] leading-relaxed"
       style={{
-        borderColor: `color-mix(in srgb, ${c} 34%, transparent)`,
-        background: `color-mix(in srgb, ${c} 10%, transparent)`,
+        borderColor: `color-mix(in srgb, ${c} 32%, transparent)`,
+        background: `color-mix(in srgb, ${c} 9%, transparent)`,
       }}
     >
       {title ? (
-        <div
-          className="mb-1 flex items-center gap-2 font-semibold"
-          style={{ color: c }}
-        >
-          <Icon name="shield" size={14} />
+        <div className="mb-1 flex items-center gap-2 font-semibold" style={{ color: c }}>
+          <Icon name={icon} size={14} />
           {title}
         </div>
       ) : null}
@@ -202,9 +191,19 @@ export function Bar({
   );
 }
 
+/** Inline status marker used in tables and lists. */
+export function Dot({ tone = "neutral", label }: { tone?: Tone; label: string }) {
+  return (
+    <span className="status" style={{ color: toneVar(tone) }}>
+      <span className="dot" style={{ background: toneVar(tone) }} aria-hidden />
+      {label}
+    </span>
+  );
+}
+
 export function Note({ children }: { children: ReactNode }) {
   return (
-    <p className="mt-3 max-w-[78ch] text-[11px] leading-relaxed text-[var(--color-ink-4)]">
+    <p className="micro mt-3 max-w-[78ch] leading-relaxed text-[var(--color-ink-4)]">
       {children}
     </p>
   );

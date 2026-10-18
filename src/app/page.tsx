@@ -1,42 +1,34 @@
-﻿import Link from "next/link";
+﻿import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
 import { candidateRepository } from "@/lib/candidate-repository";
 import { tldRepository } from "@/lib/repository";
 import { prisma } from "@/lib/db";
 import { Badge, availabilityTone } from "@/components/badge";
-import { Bar, Empty, Note, Panel } from "@/components/ui";
+import { Icon } from "@/components/icons";
+import { Bar, Note, Panel, StatLine } from "@/components/ui";
 import { InvestigateLauncher } from "@/components/investigate-launcher";
 import { TldStatus, SourceStatus } from "@/lib/enums";
+
+export const metadata: Metadata = {
+  title: "Console",
+};
 
 export default function ConsolePage() {
   return (
     <div>
-      <section className="hero-panel mb-8 px-6 py-9 sm:px-9 sm:py-11">
-        <div className="relative z-10 max-w-[62ch]">
-          <div className="eyebrow mb-3">Domain intelligence terminal</div>
-          <h1 className="display">
-            Trace what a domain
-            <br className="hidden sm:block" /> actually is.
-          </h1>
-          <p className="lede mt-4">
-            Live RDAP lookups across every verified extension, a local candidate
-            pipeline, and an evidence trail behind every row. An unverified lookup
-            is never presented as an available domain.
-          </p>
-          <div className="mt-7 max-w-2xl">
-            <InvestigateLauncher />
-          </div>
-          <div className="mt-5 flex flex-wrap items-center gap-2">
-            <Link href="/candidates" className="btn btn-ghost btn-sm">
-              Candidate pipeline
-            </Link>
-            <Link href="/sources" className="btn btn-ghost btn-sm">
-              Registry &amp; sources
-            </Link>
-            <span className="hidden items-center gap-2 text-[11.5px] text-[var(--color-ink-3)] sm:flex">
-              <span className="kbd">⌘K</span> command menu
-            </span>
-          </div>
+      <section className="pt-2">
+        <div className="eyebrow mb-3.5">Domain intelligence desk</div>
+        <h1 className="display">
+          What is this domain, <em>really</em>?
+        </h1>
+        <p className="lede mt-4">
+          Type a name. Domain Radar checks it against every registry we hold a
+          verified endpoint for, and shows the evidence behind the answer —
+          including what it cannot prove.
+        </p>
+        <div className="mt-7">
+          <InvestigateLauncher />
         </div>
       </section>
 
@@ -49,8 +41,8 @@ export default function ConsolePage() {
 
 function ConsoleSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="skeleton h-[92px]" />
+    <div className="mt-9 space-y-6">
+      <div className="skeleton h-[54px]" />
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="skeleton h-72 lg:col-span-3" />
         <div className="skeleton h-72 lg:col-span-2" />
@@ -125,105 +117,113 @@ async function ConsoleData() {
   const maxStatus = Math.max(1, ...statusRows.map((r) => r.count));
 
   return (
-    <>
-      <div className="panel mb-6 overflow-hidden">
-        <div className="grid grid-cols-2 gap-px bg-[var(--color-line)] lg:grid-cols-4">
-          <Signal label="Candidates staged" value={candCounts.total} hint="in the local pipeline" />
-          <Signal
-            label="Registry checks"
-            value={totalChecks}
-            hint={lastCheck ? `latest ${formatWhen(lastCheck.checkedAt)}` : "none recorded"}
-          />
-          <Signal
-            label="Extensions live"
-            value={availableTlds}
-            hint={`${unsupportedTlds} explicitly unsupported`}
-          />
-          <Signal
-            label="Operational sources"
-            value={`${operationalSources}/${sources.length}`}
-            hint="status: available"
-          />
-        </div>
-      </div>
+    <div className="mt-8 space-y-6">
+      <StatLine
+        items={[
+          { label: "Candidates staged", value: candCounts.total },
+          { label: "Registry checks", value: totalChecks },
+          { label: "Extensions live", value: availableTlds, tone: "accent" },
+          { label: "Sources operational", value: `${operationalSources}/${sources.length}` },
+        ]}
+      />
+      <p className="micro -mt-3">
+        {lastCheck
+          ? `Latest registry check ${formatWhen(lastCheck.checkedAt)} · `
+          : "No registry checks recorded yet · "}
+        {unsupportedTlds} extensions are explicitly unsupported and never scanned.
+      </p>
 
       <div className="grid min-w-0 gap-6 lg:grid-cols-5">
         <div className="min-w-0 lg:col-span-3">
-          <Panel
-            flush
-            icon="clock"
-            title="Recent investigations"
-            note="Latest RDAP lookups recorded on this instance"
-            actions={
+          <section className="panel-flush">
+            <div className="panel-head">
+              <div className="min-w-0">
+                <h2 className="panel-title">
+                  <Icon name="clock" size={15} />
+                  Recent investigations
+                </h2>
+                <p className="panel-note">
+                  RDAP lookups recorded on this instance, newest first
+                </p>
+              </div>
               <Link href="/scanner" className="btn btn-ghost btn-sm">
                 New lookup
               </Link>
-            }
-          >
+            </div>
+
             {recentSessions.length === 0 ? (
-              <Empty
-                icon="investigate"
-                title="No investigations recorded"
-                hint="Run a live RDAP lookup and it will appear here with its evidence."
-                action={
-                  <Link href="/scanner" className="btn btn-primary btn-sm">
-                    Open Investigate
-                  </Link>
-                }
-              />
-            ) : (
-              <div className="grid-wrap">
-                <table className="grid-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Coverage</th>
-                      <th className="num">Registered</th>
-                      <th className="num">No record</th>
-                      <th>Status</th>
-                      <th>When</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentSessions.map((s) => (
-                      <tr key={s.id}>
-                        <td>
-                          <Link
-                            href={`/scanner?name=${encodeURIComponent(s.normalizedSld)}`}
-                            className="primary mono"
-                          >
-                            {s.normalizedSld}
-                          </Link>
-                        </td>
-                        <td className="num">
-                          {s.checkedCount}/{s.requestedCount}
-                        </td>
-                        <td className="num">{s.registeredCount}</td>
-                        <td className="num">{s.notFoundCount}</td>
-                        <td>
-                          <Badge
-                            tone={
-                              s.status === "COMPLETED"
-                                ? "good"
-                                : s.status === "FAILED"
-                                  ? "bad"
-                                  : "warn"
-                            }
-                            dot
-                          >
-                            {s.status}
-                          </Badge>
-                        </td>
-                        <td className="faint">
-                          {formatWhen(s.completedAt ?? s.startedAt)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="empty">
+                <div className="empty-icon">
+                  <Icon name="investigate" size={20} />
+                </div>
+                <p className="text-[13.5px] font-medium text-[var(--color-ink)]">
+                  No investigations recorded
+                </p>
+                <p className="max-w-sm text-[12px] leading-relaxed text-[var(--color-ink-3)]">
+                  Run a live lookup above and it will appear here with its
+                  evidence trail.
+                </p>
               </div>
+            ) : (
+              <ul>
+                {recentSessions.map((s) => (
+                  <li key={s.id}>
+                    <Link
+                      href={`/scanner?name=${encodeURIComponent(s.normalizedSld)}`}
+                      className="group flex items-center gap-3 border-b border-[var(--color-line)] px-4 py-3 transition-colors last:border-0 hover:bg-[var(--color-bg-2)]"
+                    >
+                      <span
+                        className="dot shrink-0"
+                        style={{
+                          background:
+                            s.status === "COMPLETED"
+                              ? "var(--color-ok)"
+                              : s.status === "FAILED"
+                                ? "var(--color-bad)"
+                                : "var(--color-warn)",
+                        }}
+                        aria-hidden
+                      />
+                      <span className="mono min-w-0 flex-1 truncate text-[13.5px] text-[var(--color-ink)]">
+                        {s.normalizedSld}
+                      </span>
+                      <span className="micro hidden whitespace-nowrap md:inline">
+                        <span className="tnum text-[var(--color-ink-2)]">
+                          {s.registeredCount}
+                        </span>{" "}
+                        registered
+                        <span className="mx-1.5 text-[var(--color-ink-4)]">·</span>
+                        <span className="tnum text-[var(--color-ink-2)]">
+                          {s.checkedCount}
+                        </span>{" "}
+                        checked
+                      </span>
+                      <Badge
+                        dot
+                        tone={
+                          s.status === "COMPLETED"
+                            ? "good"
+                            : s.status === "FAILED"
+                              ? "bad"
+                              : "warn"
+                        }
+                      >
+                        {s.status === "COMPLETED" ? "complete" : s.status.toLowerCase()}
+                      </Badge>
+                      <span className="faint whitespace-nowrap text-[11px]">
+                        {formatWhen(s.completedAt ?? s.startedAt)}
+                      </span>
+                      <Icon
+                        name="chevron"
+                        size={15}
+                        className="shrink-0 text-[var(--color-ink-4)] transition-colors group-hover:text-[var(--color-ink-2)]"
+                      />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             )}
-          </Panel>
+          </section>
         </div>
 
         <div className="min-w-0 space-y-6 lg:col-span-2">
@@ -257,8 +257,8 @@ async function ConsoleData() {
               </ul>
             )}
             <Note>
-              * &ldquo;No record&rdquo; means RDAP returned nothing for that name —
-              it is not proof the domain is available to register.
+              * &ldquo;No record&rdquo; means RDAP returned nothing for that name — it is
+              not proof the domain is available to register.
             </Note>
           </Panel>
 
@@ -266,8 +266,8 @@ async function ConsoleData() {
             title="Candidates by extension"
             icon="pipeline"
             actions={
-              <Link href="/candidates" className="link text-[11.5px]">
-                Manage →
+              <Link href="/candidates" className="btn btn-quiet btn-sm">
+                Manage
               </Link>
             }
           >
@@ -289,7 +289,7 @@ async function ConsoleData() {
                     .sort((a, b) => b.count - a.count)
                     .map((row) => (
                       <tr key={row.tld}>
-                        <td className="mono">{row.tld}</td>
+                        <td className="mono primary">.{row.tld}</td>
                         <td className="num">{row.count}</td>
                       </tr>
                     ))}
@@ -299,34 +299,6 @@ async function ConsoleData() {
           </Panel>
         </div>
       </div>
-
-      <div className="mt-6">
-        <Note>
-          Every figure on this page is read from the local database or a live
-          registry lookup — nothing is simulated, sampled or invented. Coverage is
-          limited to extensions with a verified RDAP endpoint.
-        </Note>
-      </div>
-    </>
-  );
-}
-
-function Signal({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: React.ReactNode;
-  hint?: string;
-}) {
-  return (
-    <div className="bg-[var(--color-panel)] px-5 py-4">
-      <div className="eyebrow">{label}</div>
-      <div className="stat-lg mt-2.5">{value}</div>
-      {hint ? (
-        <div className="mt-1.5 text-[11.5px] text-[var(--color-ink-3)]">{hint}</div>
-      ) : null}
     </div>
   );
 }
