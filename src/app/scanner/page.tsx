@@ -7,24 +7,29 @@ import { Badge } from "@/components/badge";
 interface VariantView {
   tld: string;
   fqdn: string;
-  status:
-    | "PENDING_CHECK"
-    | "UNSUPPORTED"
-    | "NEEDS_VERIFICATION"
-    | "DISABLED"
-    | "UNKNOWN_TLD";
+  status: string;
   source: string | null;
+  sourceKey: string | null;
+  providerHost: string | null;
+  requestUrl: string | null;
+  httpStatus: number | null;
+  errorKind: string | null;
   lastCheckedAt: string | null;
+  cached: boolean;
   detail: string;
 }
 
 interface SearchResponse {
   sessionId: string;
   sld: string;
+  status: string;
   requestedCount: number;
+  checkedCount: number;
+  registeredCount: number;
+  notFoundCount: number;
   unsupportedCount: number;
   unresolvedCount: number;
-  checkedCount: number;
+  errorCount: number;
   variants: VariantView[];
   note: string;
 }
@@ -35,13 +40,44 @@ interface TldRow {
   displayName: string;
 }
 
-const STATUS_TONE: Record<VariantView["status"], Parameters<typeof Badge>[0]["tone"]> = {
-  PENDING_CHECK: "info",
-  UNSUPPORTED: "unknown",
+type Tone = Parameters<typeof Badge>[0]["tone"];
+
+const STATUS_TONE: Record<string, Tone> = {
+  REGISTERED: "bad",
+  NOT_FOUND: "info",
+  RESERVED: "warn",
+  RESTRICTED: "warn",
+  RATE_LIMITED: "warn",
+  ERROR: "warn",
+  UNKNOWN: "unknown",
+  UNSUPPORTED: "neutral",
   NEEDS_VERIFICATION: "warn",
   DISABLED: "unknown",
   UNKNOWN_TLD: "warn",
 };
+
+const STATUS_LABEL: Record<string, string> = {
+  REGISTERED: "Registered",
+  NOT_FOUND: "Not found*",
+  RATE_LIMITED: "Rate limited",
+  ERROR: "Error",
+  UNSUPPORTED: "Unsupported",
+  NEEDS_VERIFICATION: "Needs verification",
+  DISABLED: "Disabled",
+  UNKNOWN_TLD: "Unknown TLD",
+  UNKNOWN: "Unknown",
+};
+
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function ScannerPage() {
   const [name, setName] = useState("AgentCapability");
@@ -99,7 +135,7 @@ export default function ScannerPage() {
     <div>
       <PageHeader
         title="Domain Scanner"
-        description="Enter a name to see its variants across the selected extensions. This milestone enumerates and records the search; live RDAP availability checks arrive in Milestone 2. No variant is ever marked available without a verified lookup."
+        description="Live registry lookups (RDAP) across the selected extensions. RDAP reports registry state only — 'Not found' means no registry record was returned, it is NOT proof a domain is available to register."
       />
 
       <form onSubmit={runSearch} className="mb-6">
@@ -122,7 +158,7 @@ export default function ScannerPage() {
             disabled={loading || selected.length === 0}
             className="px-4 py-2 rounded-md bg-[var(--color-accent)] text-white text-sm font-medium disabled:opacity-50"
           >
-            {loading ? "Working…" : "Show variants"}
+            {loading ? "Checking…" : "Check availability"}
           </button>
         </div>
 
@@ -153,7 +189,8 @@ export default function ScannerPage() {
             })}
           </div>
           <p className="text-[11px] text-[var(--color-muted)] mt-2">
-            * extension is not a verified RDAP-available TLD — see Sources &amp; TLDs.
+            * extension is not a verified RDAP-available TLD — it will be reported
+            as unsupported/needs-verification, never guessed.
           </p>
         </fieldset>
       </form>
@@ -166,12 +203,14 @@ export default function ScannerPage() {
 
       {result ? (
         <div>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 mb-4">
             <StatCard label="Requested" value={result.requestedCount} />
-            <StatCard label="Checked" value={result.checkedCount} hint="Milestone 2" />
+            <StatCard label="Checked" value={result.checkedCount} />
+            <StatCard label="Registered" value={result.registeredCount} />
+            <StatCard label="Not found*" value={result.notFoundCount} />
             <StatCard label="Unsupported" value={result.unsupportedCount} />
             <StatCard label="Unresolved" value={result.unresolvedCount} />
-            <StatCard label="Variants" value={result.variants.length} />
+            <StatCard label="Errors" value={result.errorCount} />
           </div>
 
           <table className="w-full text-sm border border-[var(--color-border)] rounded-lg overflow-hidden">
@@ -180,7 +219,8 @@ export default function ScannerPage() {
                 <th className="text-left px-3 py-2 font-medium">Domain</th>
                 <th className="text-left px-3 py-2 font-medium">Status</th>
                 <th className="text-left px-3 py-2 font-medium">Source</th>
-                <th className="text-left px-3 py-2 font-medium">Last checked</th>
+                <th className="text-left px-3 py-2 font-medium">HTTP</th>
+                <th className="text-left px-3 py-2 font-medium">Checked</th>
                 <th className="text-left px-3 py-2 font-medium">Detail</th>
               </tr>
             </thead>
@@ -189,25 +229,35 @@ export default function ScannerPage() {
                 <tr key={v.tld} className="border-t border-[var(--color-border)]">
                   <td className="px-3 py-2 font-mono">{v.fqdn}</td>
                   <td className="px-3 py-2">
-                    <Badge tone={STATUS_TONE[v.status]}>{v.status}</Badge>
+                    <Badge tone={STATUS_TONE[v.status] ?? "unknown"}>
+                      {STATUS_LABEL[v.status] ?? v.status}
+                    </Badge>
                   </td>
                   <td className="px-3 py-2 text-[var(--color-muted)]">
                     {v.source ?? "—"}
                   </td>
-                  <td className="px-3 py-2 text-[var(--color-muted)]">
-                    {v.lastCheckedAt ?? "never"}
+                  <td className="px-3 py-2 text-[var(--color-muted)] font-mono">
+                    {v.httpStatus ?? "—"}
+                  </td>
+                  <td className="px-3 py-2 text-[var(--color-muted)] whitespace-nowrap">
+                    {v.cached ? "cached" : v.lastCheckedAt ? formatTime(v.lastCheckedAt) : "—"}
                   </td>
                   <td className="px-3 py-2 text-[var(--color-muted)]">{v.detail}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="text-xs text-[var(--color-muted)] mt-3">{result.note}</p>
+          <p className="text-xs text-[var(--color-muted)] mt-3">
+            * {result.note}
+          </p>
+          <p className="text-[11px] text-[var(--color-muted)] mt-1">
+            Session {result.sessionId} · {result.status}
+          </p>
         </div>
       ) : (
         <EmptyCard
           title="No search yet"
-          hint="Choose extensions and a name, then run the search."
+          hint="Choose extensions and a name, then run a live RDAP check."
         />
       )}
     </div>

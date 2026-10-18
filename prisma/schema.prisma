@@ -125,6 +125,8 @@ model DomainVariantCheck {
   tldId            String
   tld              TldRegistry @relation(fields: [tldId], references: [id])
   fqdn             String // normalized full domain, e.g. "agentcapability.com"
+  providerHost     String? // RDAP provider hostname the query was sent to
+  requestUrl       String? // exact https URL requested (audit; no secrets)
   httpStatus       Int?
   rawStatus        String? // verbatim provider status/error text (bounded)
   normalizedStatus String // see enums.AvailabilityStatus

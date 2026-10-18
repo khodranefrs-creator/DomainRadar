@@ -11,17 +11,39 @@ Two rules drive the whole project:
 2. **Multi-TLD from day one.** A name is evaluated across every verified
    extension at once, not just `.com`.
 
-## Status — Milestone 1
+## Status — Milestone 2 (live RDAP availability)
 
 - Local Next.js app bound to `127.0.0.1` only. Nothing is deployed.
 - SQLite database via Prisma (`data/domain-radar.db`).
 - Multi-TLD schema: `TldRegistry`, `DomainSearchSession`, `DomainVariantCheck`,
   candidates, evidence, sources, settings and more.
 - Candidate CSV import/export with formula-injection sanitisation.
-- Scanner enumerates variants for a name across verified TLDs and records a
-  session. **Live RDAP availability checks land in Milestone 2** — the scanner
-  reports honest `PENDING` statuses until then.
+- **Live RDAP availability checks.** The scanner resolves each extension through
+  the IANA RDAP bootstrap (`https://data.iana.org/rdap/dns.json`, cached 24h) and
+  queries the registry's own RDAP service server-side. No endpoint is guessed.
+- Every check is persisted to `DomainVariantCheck` with audit metadata:
+  provider host, request URL, HTTP status, raw + normalized status, error kind,
+  response time, and the freshness window. Results are served from cache within
+  the source TTL.
 - Source + TLD registries seeded from live-verified catalogs.
+
+### Availability statuses
+
+Each variant ends in exactly one of these — none of them is a synthetic
+"available" state:
+
+| Status | Meaning |
+| --- | --- |
+| `REGISTERED` | RDAP returned a domain record (the name is taken). |
+| `NOT_FOUND` | RDAP had no record. **Not** a guarantee the name can be registered. |
+| `RATE_LIMITED` | Provider returned 429; result unknown until retried later. |
+| `UNSUPPORTED` | No verified RDAP endpoint for this extension; no request made. |
+| `UNKNOWN` / `NEEDS_VERIFICATION` | Insufficient evidence; never shown as available. |
+| `ERROR` | Transport/HTTP failure (timeout, network, 5xx, malformed, SSRF-blocked). |
+
+The name summary reports `requested`, `checked`, `registered`, `notFound`,
+`unsupported`, `unresolved` and `error` counts, plus a session status
+(`COMPLETED` / `PARTIAL` / `FAILED`).
 
 ## Requirements
 
@@ -50,8 +72,13 @@ Open http://127.0.0.1:3000
 | `npm run build` | Production build (uses webpack — see note) |
 | `npm run start` | Production server on `127.0.0.1:3000` |
 | `npm test` | Vitest unit suite |
+| `npx tsx tests/live/rdap-smoke.ts` | Live RDAP smoke test (real network, low volume) |
 | `npm run lint` | ESLint |
 | `npx tsc --noEmit` | Type check |
+
+The live smoke test is **not** part of the unit run (`tests/live` is excluded by
+`vitest.config.mts`). It performs a handful of real, rate-limited requests
+against public registry endpoints and writes nothing to the database.
 | `npx tsx prisma/seed.ts` | Seed TLD + source registries |
 
 ### Build note (Windows)
@@ -68,8 +95,12 @@ status. Planned adapters are never shown as operational.
 
 - **RDAP** (`.com`, `.net`, `.si`, `.ai`, `.io`, `.app`, `.dev`, `.org`, `.xyz`,
   `.tech`, `.online`, `.site`, `.store`, `.cloud`) — endpoints confirmed with a
-  live request on 2026-10-18. `.co` and `.me` are `UNSUPPORTED` (no IANA
-  bootstrap entry); they are never silently omitted or guessed.
+  live request on 2026-10-18. Bases are resolved from the IANA bootstrap (or the
+  verified catalog for TLDs like `.io` that the bootstrap omits). `.co` and `.me`
+  are `UNSUPPORTED` (no IANA bootstrap entry); they are never silently omitted or
+  guessed. Lookups are server-side only, go through an SSRF host allowlist
+  (https-only), and use a per-provider rate limiter (~1 request/second), a 10s
+  timeout and bounded retries with backoff for transient failures.
 - **NameBio** — TLD/sales statistics, free endpoints, rate-limited to 4/min.
   Attribution and a link are required; results cached ≥24h.
 - **WIPO Global Brand Database / TMview** — `MANUAL_ONLY`. Both prohibit

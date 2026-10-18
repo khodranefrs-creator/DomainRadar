@@ -34,6 +34,7 @@ export const AvailabilityStatus = {
   NOT_FOUND: "NOT_FOUND", // returned by provider; registrability NOT guaranteed
   RESERVED: "RESERVED",
   RESTRICTED: "RESTRICTED",
+  RATE_LIMITED: "RATE_LIMITED",
   UNKNOWN: "UNKNOWN", // insufficient evidence — never shown as available
   UNSUPPORTED: "UNSUPPORTED",
   ERROR: "ERROR",
@@ -46,6 +47,9 @@ export const ErrorKind = {
   NETWORK: "NETWORK",
   RATE_LIMITED: "RATE_LIMITED",
   SERVER_ERROR: "SERVER_ERROR",
+  CLIENT_ERROR: "CLIENT_ERROR",
+  AUTH: "AUTH",
+  REDIRECT: "REDIRECT",
   MALFORMED: "MALFORMED",
   UNSUPPORTED: "UNSUPPORTED",
   SSRF_BLOCKED: "SSRF_BLOCKED",
