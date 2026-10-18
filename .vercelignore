@@ -1,0 +1,13 @@
+# Never upload local secrets, the local SQLite database, or build artifacts.
+# Vercel deployments get configuration from the project's environment variables.
+.env
+.env.local
+.env.*.local
+.vercel
+.next
+node_modules
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+*.tsbuildinfo
