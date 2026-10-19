@@ -1,15 +1,6 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 
-type Tone = "neutral" | "good" | "warn" | "bad" | "info" | "unknown";
-
-const TONE_COLOR: Record<Tone, string> = {
-  neutral: "var(--color-ink-2)",
-  good: "var(--color-ok)",
-  warn: "var(--color-warn)",
-  bad: "var(--color-bad)",
-  info: "var(--color-info)",
-  unknown: "var(--color-ink-3)",
-};
+type Tone = "neutral" | "good" | "warn" | "bad" | "info" | "unknown" | "accent";
 
 export function Badge({
   children,
@@ -22,18 +13,9 @@ export function Badge({
   title?: string;
   dot?: boolean;
 }) {
-  const c = TONE_COLOR[tone] ?? TONE_COLOR.neutral;
   return (
-    <span
-      title={title}
-      className="status rounded-md border px-2 py-[3px] text-[11px]"
-      style={{
-        color: c,
-        borderColor: `color-mix(in srgb, ${c} 34%, transparent)`,
-        background: `color-mix(in srgb, ${c} 10%, transparent)`,
-      }}
-    >
-      {dot ? <span className="dot" style={{ background: c }} aria-hidden /> : null}
+    <span className="st" data-tone={tone} title={title}>
+      {dot ? <span className="dot" aria-hidden /> : null}
       {children}
     </span>
   );
@@ -73,3 +55,4 @@ export function tldStatusTone(status: string): Tone {
       return "neutral";
   }
 }
+

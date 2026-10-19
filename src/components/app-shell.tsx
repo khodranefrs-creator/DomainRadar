@@ -17,7 +17,7 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: "Research",
     items: [
-      { href: "/", label: "Console", icon: "console", hint: "Overview & launch" },
+      { href: "/", label: "Console", icon: "console", hint: "Launch & overview" },
       { href: "/scanner", label: "Investigate", icon: "investigate", hint: "Live RDAP lookup" },
       { href: "/candidates", label: "Pipeline", icon: "pipeline", hint: "Candidate domains" },
       { href: "/experiments", label: "Experiments", icon: "experiments", note: "M7" },
@@ -26,8 +26,8 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: "Market",
     items: [
-      { href: "/sales", label: "Sales & Comps", icon: "sales", note: "M3" },
-      { href: "/trends", label: "Trends & News", icon: "trends", note: "M5" },
+      { href: "/sales", label: "Sales & comps", icon: "sales", note: "M3" },
+      { href: "/trends", label: "Trends & news", icon: "trends", note: "M5" },
       { href: "/buyers", label: "Buyers", icon: "buyers", note: "M6" },
       { href: "/trademarks", label: "Trademarks", icon: "trademarks", note: "M6" },
     ],
@@ -37,7 +37,7 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/portfolio", label: "Portfolio", icon: "portfolio", note: "M4" },
       { href: "/sources", label: "Registry", icon: "registry", hint: "Extensions & sources" },
-      { href: "/settings", label: "Settings", icon: "settings" },
+      { href: "/settings", label: "Settings", icon: "settings", hint: "Defaults & limits" },
     ],
   },
 ];
@@ -52,13 +52,13 @@ const TABS: { href: string; label: string; icon: string }[] = [
 ];
 
 function matchRoute(pathname: string) {
-  if (pathname === "/") return { group: "Research", item: ALL[0] };
+  if (pathname === "/") return { item: ALL[0], group: "Research" };
   const found = ALL.filter((i) => i.href !== "/" && pathname.startsWith(i.href)).sort(
     (a, b) => b.href.length - a.href.length,
   )[0];
-  if (!found) return { group: "Research", item: { href: pathname, label: "Not found", icon: "compass" } };
+  if (!found) return { item: null, group: "Research" };
   const group = GROUPS.find((g) => g.items.includes(found))?.label ?? "Research";
-  return { group, item: found };
+  return { item: found, group };
 }
 
 /* ---------------------------------------------------------------- palette */
@@ -72,10 +72,10 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
   const results = useMemo(() => {
     const term = q.trim().toLowerCase();
     const items: { key: string; label: string; sub: string; icon: string; go: () => void }[] = [];
-    const pushes: string[] = [];
+    const seen = new Set<string>();
     const push = (i: (typeof items)[number]) => {
-      if (pushes.includes(i.key)) return;
-      pushes.push(i.key);
+      if (seen.has(i.key)) return;
+      seen.add(i.key);
       items.push(i);
     };
 
@@ -83,7 +83,7 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
       push({
         key: "investigate",
         label: `Investigate “${q.trim()}”`,
-        sub: "Run a live RDAP lookup across your default extensions",
+        sub: "Live RDAP check across your default extensions",
         icon: "investigate",
         go: () => {
           router.push(`/scanner?name=${encodeURIComponent(q.trim())}`);
@@ -103,7 +103,7 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
       push({
         key: item.href,
         label: item.label,
-        sub: item.hint ?? (item.note ? `Planned · ${item.note}` : "Jump to page"),
+        sub: item.hint ?? (item.note ? `Planned · ${item.note}` : "Go to page"),
         icon: item.icon,
         go: () => {
           router.push(item.href);
@@ -145,8 +145,8 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
               setActive(0);
             }}
             onKeyDown={onKeyDown}
-            placeholder="Investigate a domain, or jump to a page…"
-            className="h-14 flex-1 border-0 bg-transparent font-mono text-[14.5px] text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-4)]"
+            placeholder="Search a domain, or jump to a surface…"
+            className="h-14 flex-1 border-0 bg-transparent font-mono text-[15px] text-[var(--color-ink)] outline-none placeholder:font-sans placeholder:text-[var(--color-ink-4)]"
             spellCheck={false}
             autoComplete="off"
             aria-label="Command input"
@@ -156,7 +156,7 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
         <div className="max-h-[52vh] overflow-y-auto p-2">
           {results.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-[var(--color-ink-3)]">
-              No matches.
+              Nothing matches that.
             </p>
           ) : (
             results.map((r, i) => (
@@ -168,12 +168,12 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
                 onClick={r.go}
                 className="palette-item"
               >
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[var(--color-line)] bg-[var(--color-bg)]">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-[var(--color-surface-2)] text-[var(--color-ink-2)]">
                   <Icon name={r.icon} size={16} />
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate">{r.label}</span>
-                  <span className="block truncate text-[11.5px] text-[var(--color-ink-3)]">
+                  <span className="block truncate font-medium">{r.label}</span>
+                  <span className="block truncate text-[12px] text-[var(--color-ink-3)]">
                     {r.sub}
                   </span>
                 </span>
@@ -186,25 +186,28 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
             ))
           )}
         </div>
-        <div className="flex items-center gap-4 border-t border-[var(--color-line)] px-4 py-2.5 text-[11px] text-[var(--color-ink-4)]">
+        <div className="flex items-center gap-4 border-t border-[var(--color-line)] bg-[var(--color-surface-2)] px-4 py-2.5 text-[11.5px] text-[var(--color-ink-3)]">
           <span className="flex items-center gap-1.5">
             <span className="kbd">↑</span>
-            <span className="kbd">↓</span> navigate
+            <span className="kbd">↓</span> move
           </span>
           <span className="flex items-center gap-1.5">
             <span className="kbd">↵</span> open
           </span>
-          <span className="ml-auto">Domain Radar</span>
+          <span className="ml-auto font-medium">Domain Radar</span>
         </div>
       </div>
     </>
   );
 }
 
+/* ------------------------------------------------------------------- shell */
+
 export function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const route = matchRoute(pathname);
 
   useEffect(() => {
@@ -224,11 +227,23 @@ export function AppChrome({ children }: { children: ReactNode }) {
       } else if (e.key === "Escape") {
         setPaletteOpen(false);
         setSheetOpen(false);
+        setMoreOpen(false);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [paletteOpen]);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    function onPointer(e: PointerEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest("[data-more-root]")) return;
+      setMoreOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointer);
+    return () => document.removeEventListener("pointerdown", onPointer);
+  }, [moreOpen]);
 
   useEffect(() => {
     const open = paletteOpen || sheetOpen;
@@ -238,128 +253,123 @@ export function AppChrome({ children }: { children: ReactNode }) {
     };
   }, [paletteOpen, sheetOpen]);
 
+  const planned = GROUPS[1].items.concat(GROUPS[2].items.filter((i) => i.note));
+
   return (
-    <div className="shell">
-      <aside className="rail max-lg:hidden">
-        <div className="rail-brand">
-          <BrandMark size={30} />
-          <div className="min-w-0">
-            <div className="rail-word">
-              Domain Radar
-              <small>Intelligence desk</small>
-            </div>
-          </div>
-        </div>
-
-        <nav className="rail-nav" aria-label="Sections">
-          {GROUPS.map((group) => (
-            <div key={group.label}>
-              <div className="rail-group">{group.label}</div>
-              {group.items.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  data-active={pathname === item.href}
-                  className="nl"
-                >
-                  <Icon name={item.icon} size={17} />
-                  <span className="truncate">{item.label}</span>
-                  {item.note ? <span className="nl-note">{item.note}</span> : null}
-                </Link>
-              ))}
-            </div>
-          ))}
-        </nav>
-
-        <div className="rail-foot">
-          <div className="flex items-center gap-2 text-[11.5px] text-[var(--color-ink-3)]">
-            <span className="relative flex h-1.5 w-1.5 text-[var(--color-accent)]">
-              <span className="ping absolute inline-flex h-1.5 w-1.5 rounded-full" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" />
-            </span>
-            RDAP availability · live
-          </div>
-          <p className="micro mt-2 max-w-[26ch]">
-            Unverified lookups are never reported as available.
-          </p>
-        </div>
-      </aside>
-
-      <div className="shell-col">
-        <header className="topbar">
-          <div className="flex items-center gap-2.5 lg:hidden">
+    <div className="app">
+      <header className="nav">
+        <div className="nav-in">
+          <Link href="/" className="brand" aria-label="Domain Radar — home">
             <BrandMark size={26} />
-            <span className="font-display text-[15px] tracking-tight">Domain Radar</span>
-          </div>
+            <span className="brand-name">
+              Domain<span>Radar</span>
+            </span>
+          </Link>
 
-          <div className="crumb max-lg:hidden">
-            <span>{route.group}</span>
-            <Icon name="chevron" size={13} className="text-[var(--color-ink-4)]" />
-            <b>{route.item.label}</b>
-          </div>
+          <nav className="nav-links" aria-label="Primary">
+            {TABS.map((t) => (
+              <Link
+                key={t.href}
+                href={t.href}
+                data-active={pathname === t.href}
+                className="nav-link"
+              >
+                {t.label}
+              </Link>
+            ))}
+            <div className="relative hidden lg:block" data-more-root>
+              <button
+                type="button"
+                className="nav-link"
+                data-active={planned.some((i) => pathname.startsWith(i.href))}
+                onClick={() => setMoreOpen((v) => !v)}
+                aria-expanded={moreOpen}
+                aria-haspopup="menu"
+              >
+                More
+                <Icon name="expand" size={13} />
+              </button>
+              {moreOpen ? (
+                <div className="absolute left-0 top-[42px] z-50 w-[248px] rounded-[14px] border border-[var(--color-line)] bg-[var(--color-surface)] p-1.5 shadow-[var(--shadow-lg)]">
+                  {planned.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className="palette-item"
+                      onClick={() => setMoreOpen(false)}
+                    >
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[var(--color-surface-2)] text-[var(--color-ink-2)]">
+                        <Icon name={item.icon} size={15} />
+                      </span>
+                      <span className="truncate font-medium">{item.label}</span>
+                      <span className="ml-auto font-mono text-[10.5px] text-[var(--color-ink-4)]">
+                        {item.note}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </nav>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="nav-side">
             <button
               type="button"
               onClick={() => setPaletteOpen(true)}
-              className="cmd-btn hidden lg:flex"
+              className="hidden h-9 items-center gap-2 rounded-full border border-[var(--color-deck-line)] bg-[color-mix(in_srgb,var(--color-deck-ink)_7%,transparent)] pl-3 pr-2 text-[12.5px] text-[var(--color-deck-ink-2)] transition-colors hover:text-[var(--color-deck-ink)] lg:flex"
               aria-label="Open command menu"
             >
               <Icon name="search" size={15} />
-              <span className="w-[210px] text-left">Search or investigate…</span>
+              <span className="w-[132px] text-left">Search or investigate</span>
               <span className="kbd">⌘K</span>
             </button>
+
+            <Link
+              href="/settings"
+              aria-label="Settings"
+              className="icon-btn hidden lg:inline-flex"
+            >
+              <Icon name="settings" size={16} />
+            </Link>
+
+            <Link href="/scanner" className="btn btn-accent btn-sm">
+              <Icon name="investigate" size={15} />
+              <span className="max-sm:hidden">New lookup</span>
+              <span className="sm:hidden">Lookup</span>
+            </Link>
+
             <button
               type="button"
-              onClick={() => setPaletteOpen(true)}
               className="icon-btn lg:hidden"
-              aria-label="Search or investigate"
+              onClick={() => setSheetOpen(true)}
+              aria-label="Open menu"
             >
-              <Icon name="search" size={18} />
+              <Icon name="menu" size={17} />
             </button>
-            <Link
-              href="/scanner"
-              className="btn btn-accent btn-sm max-sm:hidden"
-              aria-label="Start an investigation"
-            >
-              <Icon name="investigate" size={15} />
-              Investigate
-            </Link>
           </div>
-        </header>
+        </div>
+      </header>
 
-        <main className="main" id="content">
-          <div className="main-narrow">{children}</div>
-        </main>
+      <main className="main" id="content">
+        {children}
+      </main>
 
-        <footer className="border-t border-[var(--color-line)] px-6 py-5 text-[11.5px] leading-relaxed text-[var(--color-ink-4)] lg:px-10">
-          <div className="main-narrow flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="text-[var(--color-ink-3)]">Domain Radar</span>
-            <span aria-hidden>·</span>
-            <span>Evidence-first domain intelligence</span>
-            <span aria-hidden>·</span>
-            <span>Nothing invented; uncertainty is stated</span>
-          </div>
-        </footer>
-      </div>
-
-      <nav className="tabbar" aria-label="Primary">
-        {TABS.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            data-active={pathname === item.href}
-            className="tab"
-          >
-            <Icon name={item.icon} size={19} />
-            {item.label}
-          </Link>
-        ))}
-        <button type="button" className="tab" onClick={() => setSheetOpen(true)}>
-          <Icon name="menu" size={19} />
-          More
-        </button>
-      </nav>
+      <footer className="foot">
+        <div className="foot-in">
+          <span className="inline-flex items-center gap-2 font-medium text-[var(--color-ink-2)]">
+            <span className="relative flex h-1.5 w-1.5 text-[var(--color-ok)]">
+              <span className="ping absolute inline-flex h-1.5 w-1.5 rounded-full" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--color-ok)]" />
+            </span>
+            RDAP registry live — evidence first
+          </span>
+          <span aria-hidden className="text-[var(--color-line-3)]">·</span>
+          <span>A “no record” answer never means “available”.</span>
+          <span className="ml-auto font-mono text-[11px] text-[var(--color-ink-4)]">
+            {route.item ? `${route.group} / ${route.item.label}` : "Off the map"}
+          </span>
+        </div>
+      </footer>
 
       {sheetOpen ? (
         <>
@@ -372,25 +382,33 @@ export function AppChrome({ children }: { children: ReactNode }) {
                 setSheetOpen(false);
                 setPaletteOpen(true);
               }}
-              className="mb-2 flex w-full items-center gap-3 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] px-4 py-3 text-left text-[13px] text-[var(--color-ink-2)]"
+              className="mb-2 flex w-full items-center gap-3 rounded-[14px] border border-[var(--color-line)] bg-[var(--color-surface-2)] px-4 py-3.5 text-left text-[13.5px] font-medium text-[var(--color-ink-2)]"
             >
               <Icon name="search" size={17} />
               Search or investigate a domain
             </button>
             {GROUPS.map((group) => (
               <div key={group.label}>
-                <div className="rail-group">{group.label}</div>
+                <div className="px-2.5 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink-4)]">
+                  {group.label}
+                </div>
                 {group.items.map((item) => (
                   <Link
                     key={item.href}
                     href={item.href}
                     data-active={pathname === item.href}
-                    className="nl"
+                    className="palette-item"
                     onClick={() => setSheetOpen(false)}
                   >
-                    <Icon name={item.icon} size={17} />
-                    <span className="truncate">{item.label}</span>
-                    {item.note ? <span className="nl-note">{item.note}</span> : null}
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-[var(--color-surface-2)] text-[var(--color-ink-2)]">
+                      <Icon name={item.icon} size={16} />
+                    </span>
+                    <span className="truncate font-medium">{item.label}</span>
+                    {item.note ? (
+                      <span className="ml-auto font-mono text-[10.5px] text-[var(--color-ink-4)]">
+                        {item.note}
+                      </span>
+                    ) : null}
                   </Link>
                 ))}
               </div>
@@ -398,6 +416,19 @@ export function AppChrome({ children }: { children: ReactNode }) {
           </div>
         </>
       ) : null}
+
+      <nav className="tabbar" aria-label="Sections">
+        {TABS.map((t) => (
+          <Link key={t.href} href={t.href} data-active={pathname === t.href} className="tab">
+            <Icon name={t.icon} size={19} />
+            {t.label}
+          </Link>
+        ))}
+        <button type="button" className="tab" onClick={() => setSheetOpen(true)}>
+          <Icon name="menu" size={19} />
+          More
+        </button>
+      </nav>
 
       {paletteOpen ? <CommandPalette onClose={() => setPaletteOpen(false)} /> : null}
     </div>

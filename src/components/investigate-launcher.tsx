@@ -13,10 +13,15 @@ function clean(value: string) {
     .split(".")[0];
 }
 
+/**
+ * The product's primary action. One input, one suffix (the extension the SLD
+ * is checked against), one button — matching the immediate clarity of a domain
+ * search tool while staying honest about what the tool actually does.
+ */
 export function InvestigateLauncher({
   placeholder = "agentcapability",
-  cta = "Investigate",
-  suggestions = ["agentcapability", "openai", "stripe"],
+  cta = "Check availability",
+  suggestions = ["agentcapability", "openai", "stripe", "northwind"],
   hint = true,
 }: {
   placeholder?: string;
@@ -27,22 +32,22 @@ export function InvestigateLauncher({
   const router = useRouter();
   const [name, setName] = useState("");
 
+  const go = (value?: string) => {
+    const sld = clean(value ?? name);
+    if (!sld) return;
+    router.push(`/scanner?name=${encodeURIComponent(sld)}`);
+  };
+
   return (
     <div>
       <form
-        className="ask"
+        className="searchbar"
         onSubmit={(e) => {
           e.preventDefault();
-          const sld = clean(name);
-          if (!sld) return;
-          router.push(`/scanner?name=${encodeURIComponent(sld)}`);
+          go();
         }}
       >
-        <Icon
-          name="investigate"
-          size={19}
-          className="shrink-0 text-[var(--color-accent)]"
-        />
+        <Icon name="search" size={18} />
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -51,7 +56,10 @@ export function InvestigateLauncher({
           spellCheck={false}
           aria-label="Second-level domain label to investigate"
         />
-        <button type="submit" className="btn btn-accent btn-lg" disabled={!name.trim()}>
+        <span className="suffix" title="Checked against your default extensions">
+          .com
+        </span>
+        <button type="submit" className="go" disabled={!name.trim()}>
           {cta}
           <Icon name="arrow" size={16} />
         </button>
@@ -59,20 +67,22 @@ export function InvestigateLauncher({
 
       {suggestions.length > 0 ? (
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="micro">Try</span>
+          <span className="micro">Quick checks</span>
           {suggestions.map((s) => (
             <button
               key={s}
               type="button"
               className="chip"
-              onClick={() => setName(s)}
+              onClick={() => go(s)}
+              title={`Investigate ${s}`}
             >
               {s}
             </button>
           ))}
           {hint ? (
             <span className="micro ml-auto hidden items-center gap-1.5 sm:inline-flex">
-              <span className="kbd">⌘K</span> command menu
+              <span className="kbd">⌘K</span>
+              command menu
             </span>
           ) : null}
         </div>

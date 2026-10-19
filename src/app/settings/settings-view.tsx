@@ -240,7 +240,7 @@ export function SettingsView() {
           />
         </Panel>
 
-        <div className="fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom,0px))] z-30 border-t border-[var(--color-line)] bg-[color-mix(in_srgb,var(--color-bg)_88%,transparent)] backdrop-blur-md lg:bottom-0">
+        <div className="fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom,0px))] z-30 border-t border-[var(--color-line)] bg-[color-mix(in_srgb,var(--color-canvas)_88%,transparent)] backdrop-blur-md lg:bottom-0">
           <div className="mx-auto flex max-w-[1180px] items-center gap-3 px-6 py-3 lg:px-10">
             <button
               type="submit"

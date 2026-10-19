@@ -3,8 +3,8 @@ import { Icon } from "@/components/icons";
 
 export default function NotFound() {
   return (
-    <div className="py-10">
-      <div className="eyebrow mb-3.5">Off the map</div>
+    <div className="px-6 py-16 lg:px-10">
+      <div className="pill-eyebrow mb-4">Off the map</div>
       <h1 className="display">
         That route resolves to <em>nothing</em>.
       </h1>

@@ -220,10 +220,10 @@ export default function CandidatesPage() {
       ) : null}
 
       {compareSet.length > 0 ? (
-        <section className="dossier mb-5">
-          <div className="dossier-head">
+        <section className="panel-flush mb-5">
+          <div className="panel-head">
             <div className="min-w-0 flex-1">
-              <h2 className="section-title">Comparison</h2>
+              <h2 className="panel-title">Comparison</h2>
               <p className="panel-note">
                 {compareSet.length} of {MAX_COMPARE} domains · read across, not up
               </p>
@@ -245,11 +245,11 @@ export default function CandidatesPage() {
                 minWidth: 260 + compareSet.length * 150,
               }}
             >
-              <div className="bg-[var(--color-panel)] p-4">
+              <div className="bg-[var(--color-surface)] p-4">
                 <div className="eyebrow">Field</div>
               </div>
               {compareSet.map((c) => (
-                <div key={c.id} className="bg-[var(--color-panel)] p-4">
+                <div key={c.id} className="bg-[var(--color-surface)] p-4">
                   <div className="mono truncate text-[12.5px] text-[var(--color-ink)]">
                     {c.fqdn}
                   </div>
@@ -304,11 +304,11 @@ export default function CandidatesPage() {
                 ] as [string, (c: Candidate) => React.ReactNode][]
               ).map(([label, render]) => (
                 <Fragment key={label}>
-                  <div className="bg-[var(--color-bg-2)] p-4 text-[11.5px] text-[var(--color-ink-3)]">
+                  <div className="bg-[var(--color-surface-2)] p-4 text-[11.5px] text-[var(--color-ink-3)]">
                     {label}
                   </div>
                   {compareSet.map((c) => (
-                    <div key={`${label}-${c.id}`} className="bg-[var(--color-bg-2)] p-4">
+                    <div key={`${label}-${c.id}`} className="bg-[var(--color-surface-2)] p-4">
                       {render(c)}
                     </div>
                   ))}
@@ -460,7 +460,7 @@ export default function CandidatesPage() {
                           onChange={() => toggleSelect(c.id)}
                           onClick={(e) => e.stopPropagation()}
                           aria-label={`Compare ${c.fqdn}`}
-                          className="h-5 w-5 accent-[var(--color-accent)] max-sm:h-8 max-sm:w-8"
+                          className="h-6 w-6 accent-[var(--color-accent)] max-sm:h-8 max-sm:w-8"
                         />
                       </td>
                       <td className="mono primary">{c.fqdn}</td>
@@ -481,6 +481,7 @@ export default function CandidatesPage() {
                     open ? (
                       <tr key={`${c.id}-detail`}>
                         <td colSpan={5} className="row-detail">
+                          <div className="row-detail-in">
                           <dl className="kv">
                             <dt>Domain</dt>
                             <dd className="mono">{c.fqdn}</dd>
@@ -495,6 +496,7 @@ export default function CandidatesPage() {
                               {new Date(c.updatedAt).toISOString()}
                             </dd>
                           </dl>
+                          </div>
                         </td>
                       </tr>
                     ) : null,

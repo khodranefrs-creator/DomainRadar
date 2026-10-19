@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Icon } from "@/components/icons";
+import { Badge } from "@/components/badge";
 
 type Tone =
   | "neutral"
@@ -24,6 +25,18 @@ const TONE: Record<Tone, string> = {
   unknown: "var(--color-ink-3)",
 };
 
+const BADGE_TONE: Record<Tone, "neutral" | "good" | "warn" | "bad" | "info" | "unknown" | "accent"> = {
+  neutral: "neutral",
+  ok: "good",
+  good: "good",
+  warn: "warn",
+  bad: "bad",
+  danger: "bad",
+  info: "info",
+  accent: "accent",
+  unknown: "unknown",
+};
+
 function toneVar(tone: Tone) {
   return TONE[tone] ?? TONE.neutral;
 }
@@ -42,16 +55,18 @@ export function PageHeader({
   aside?: ReactNode;
 }) {
   return (
-    <header className="mb-7 flex flex-col gap-5 border-b border-[var(--color-line)] pb-6 lg:flex-row lg:items-end lg:justify-between">
-      <div className="min-w-0">
-        {eyebrow ? <div className="eyebrow mb-2.5">{eyebrow}</div> : null}
-        <h1 className="page-title">{title}</h1>
-        {lead ? <p className="lede mt-3">{lead}</p> : null}
+    <header className="mb-6 border-b border-[var(--color-line)] pb-6 lg:mb-7">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          {eyebrow ? <div className="eyebrow mb-2.5">{eyebrow}</div> : null}
+          <h1 className="page-title">{title}</h1>
+          {lead ? <p className="lede mt-2.5">{lead}</p> : null}
+        </div>
+        {aside ? <div className="shrink-0">{aside}</div> : null}
+        {actions ? (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
+        ) : null}
       </div>
-      {aside ? <div className="shrink-0">{aside}</div> : null}
-      {actions ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
-      ) : null}
     </header>
   );
 }
@@ -79,7 +94,7 @@ export function Panel({
         <div className="panel-head">
           <div className="flex min-w-0 items-center gap-2.5">
             {icon ? (
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-[var(--color-line)] text-[var(--color-ink-3)]">
+              <span className="panel-icon">
                 <Icon name={icon} size={15} />
               </span>
             ) : null}
@@ -130,15 +145,15 @@ export function Empty({
   return (
     <div className="empty">
       <div className="empty-icon">
-        <Icon name={icon} size={20} />
+        <Icon name={icon} size={21} />
       </div>
-      <p className="text-[13.5px] font-medium text-[var(--color-ink)]">{title}</p>
+      <p className="text-[14px] font-semibold text-[var(--color-ink)]">{title}</p>
       {hint ? (
-        <p className="max-w-sm text-[12px] leading-relaxed text-[var(--color-ink-3)]">
+        <p className="mt-1.5 max-w-[42ch] text-[12.5px] leading-relaxed text-[var(--color-ink-3)]">
           {hint}
         </p>
       ) : null}
-      {action ? <div className="mt-1.5">{action}</div> : null}
+      {action ? <div className="mt-3">{action}</div> : null}
     </div>
   );
 }
@@ -157,10 +172,10 @@ export function Callout({
   const c = toneVar(tone);
   return (
     <div
-      className="rounded-[11px] border px-4 py-3 text-[12.5px] leading-relaxed"
+      className="rounded-[var(--r-md)] border px-4 py-3 text-[13px] leading-relaxed"
       style={{
-        borderColor: `color-mix(in srgb, ${c} 32%, transparent)`,
-        background: `color-mix(in srgb, ${c} 9%, transparent)`,
+        borderColor: `color-mix(in srgb, ${c} 30%, transparent)`,
+        background: `color-mix(in srgb, ${c} 8%, transparent)`,
       }}
     >
       {title ? (
@@ -201,9 +216,17 @@ export function Dot({ tone = "neutral", label }: { tone?: Tone; label: string })
   );
 }
 
+export function StatusPill({ tone = "unknown", label }: { tone?: Tone; label: string }) {
+  return (
+    <Badge tone={BADGE_TONE[tone] ?? "unknown"} dot>
+      {label}
+    </Badge>
+  );
+}
+
 export function Note({ children }: { children: ReactNode }) {
   return (
-    <p className="micro mt-3 max-w-[78ch] leading-relaxed text-[var(--color-ink-4)]">
+    <p className="micro mt-3 max-w-[76ch] leading-relaxed text-[var(--color-ink-4)]">
       {children}
     </p>
   );

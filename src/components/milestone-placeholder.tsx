@@ -68,7 +68,7 @@ export function MilestonePlaceholder({
 
           {dataNeeds && dataNeeds.length > 0 ? (
             <div className="panel p-5">
-              <div className="eyebrow mb-3">Prerequisites</div>
+              <div className="pill-eyebrow mb-3">Prerequisites</div>
               <ul className="space-y-3">
                 {dataNeeds.map((item) => (
                   <li
@@ -84,11 +84,11 @@ export function MilestonePlaceholder({
           ) : null}
 
           <div className="panel p-3">
-            <div className="eyebrow px-2 pt-1 pb-2">Available now</div>
+            <div className="pill-eyebrow px-2 pt-1 pb-2">Available now</div>
             <ul>
               {links.map((l) => (
                 <li key={l.href}>
-                  <Link href={l.href} className="nl">
+                  <Link href={l.href} className="link-row">
                     <Icon name={l.icon} size={16} />
                     <span className="truncate text-[12.5px]">{l.label}</span>
                     <Icon

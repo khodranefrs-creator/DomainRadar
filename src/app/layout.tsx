@@ -1,22 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
+import { Geist_Mono, Inter_Tight } from "next/font/google";
 import "./globals.css";
 import { AppChrome } from "@/components/app-shell";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const interTight = Inter_Tight({
+  variable: "--font-inter-tight",
   subsets: ["latin"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
-});
-
-const display = Instrument_Serif({
-  variable: "--font-serif",
-  weight: "400",
-  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -25,11 +21,11 @@ export const metadata: Metadata = {
     template: "%s · Domain Radar",
   },
   description:
-    "Investigate a domain across every verified extension. RDAP-backed availability, registry provenance, and honest uncertainty — nothing invented.",
+    "Investigate a name across every verified registry extension. RDAP-backed registry state, provider evidence, and honest uncertainty — nothing invented.",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0b0e",
+  themeColor: "#0d0e13",
   width: "device-width",
   initialScale: 1,
 };
@@ -40,10 +36,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${display.variable}`}
-    >
+    <html lang="en" className={`${interTight.variable} ${geistMono.variable}`}>
       <body>
         <a href="#content" className="skip">
           Skip to content

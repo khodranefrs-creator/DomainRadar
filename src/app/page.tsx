@@ -16,19 +16,56 @@ export const metadata: Metadata = {
 
 export default function ConsolePage() {
   return (
-    <div>
-      <section className="pt-2">
-        <div className="eyebrow mb-3.5">Domain intelligence desk</div>
-        <h1 className="display">
-          What is this domain, <em>really</em>?
-        </h1>
-        <p className="lede mt-4">
-          Type a name. Domain Radar checks it against every registry we hold a
-          verified endpoint for, and shows the evidence behind the answer —
-          including what it cannot prove.
-        </p>
-        <div className="mt-7">
-          <InvestigateLauncher />
+    <div className="space-y-6">
+      <section className="deck">
+        <div className="deck-pad">
+          <div className="flex flex-col gap-7 lg:flex-row lg:items-start lg:gap-12">
+            <div className="min-w-0 flex-1">
+              <span className="pill-eyebrow">
+                <Icon name="spark" size={13} />
+                Live RDAP · no signup · nothing invented
+              </span>
+              <h1 className="display mt-4">
+                Check a name against{" "}
+                <em>every registry</em> that answers.
+              </h1>
+              <p className="lede mt-3.5 max-w-[52ch]">
+                Enter a name. Domain Radar queries the RDAP endpoints we hold a
+                verified record for, reports each registry state, and keeps the
+                raw evidence behind every answer.
+              </p>
+
+              <div className="mt-6">
+                <InvestigateLauncher />
+              </div>
+            </div>
+
+            <div className="hidden w-[240px] shrink-0 self-stretch lg:block">
+              <div className="rounded-[var(--r-lg)] border border-[var(--color-deck-line)] bg-[color-mix(in_srgb,var(--color-deck-ink)_5%,transparent)] p-4">
+                <div className="eyebrow mb-3">How a lookup runs</div>
+                <ol className="space-y-3">
+                  {[
+                    ["01", "Normalize the label"],
+                    ["02", "Query each extension over RDAP"],
+                    ["03", "Record registry state + provenance"],
+                    ["04", "Flag what could not be resolved"],
+                  ].map(([n, t]) => (
+                    <li key={n} className="flex gap-3">
+                      <span className="mono mt-[1px] text-[11px] text-[var(--color-accent-3)]">
+                        {n}
+                      </span>
+                      <span className="text-[12.5px] leading-snug text-[var(--color-deck-ink-2)]">
+                        {t}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                <p className="micro mt-4 border-t border-[var(--color-deck-line)] pt-3">
+                  Unverified lookups are never reported as available.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -41,11 +78,11 @@ export default function ConsolePage() {
 
 function ConsoleSkeleton() {
   return (
-    <div className="mt-9 space-y-6">
-      <div className="skeleton h-[54px]" />
-      <div className="grid gap-6 lg:grid-cols-5">
-        <div className="skeleton h-72 lg:col-span-3" />
-        <div className="skeleton h-72 lg:col-span-2" />
+    <div className="space-y-5">
+      <div className="skeleton h-[64px]" />
+      <div className="grid gap-5 lg:grid-cols-3">
+        <div className="skeleton h-64 lg:col-span-2" />
+        <div className="skeleton h-64" />
       </div>
     </div>
   );
@@ -117,50 +154,50 @@ async function ConsoleData() {
   const maxStatus = Math.max(1, ...statusRows.map((r) => r.count));
 
   return (
-    <div className="mt-8 space-y-6">
-      <StatLine
-        items={[
-          { label: "Candidates staged", value: candCounts.total },
-          { label: "Registry checks", value: totalChecks },
-          { label: "Extensions live", value: availableTlds, tone: "accent" },
-          { label: "Sources operational", value: `${operationalSources}/${sources.length}` },
-        ]}
-      />
-      <p className="micro -mt-3">
-        {lastCheck
-          ? `Latest registry check ${formatWhen(lastCheck.checkedAt)} · `
-          : "No registry checks recorded yet · "}
-        {unsupportedTlds} extensions are explicitly unsupported and never scanned.
-      </p>
+    <div className="space-y-5">
+      <div>
+        <StatLine
+          items={[
+            { label: "Candidates staged", value: candCounts.total },
+            { label: "Registry checks run", value: totalChecks },
+            { label: "Extensions live", value: availableTlds, tone: "accent" },
+            {
+              label: "Sources operational",
+              value: `${operationalSources}/${sources.length}`,
+            },
+          ]}
+        />
+        <p className="micro mt-2.5">
+          {lastCheck
+            ? `Latest registry check ${formatWhen(lastCheck.checkedAt)} · `
+            : "No registry checks recorded yet · "}
+          {unsupportedTlds} extensions are explicitly unsupported and never
+          scanned.
+        </p>
+      </div>
 
-      <div className="grid min-w-0 gap-6 lg:grid-cols-5">
-        <div className="min-w-0 lg:col-span-3">
-          <section className="panel-flush">
-            <div className="panel-head">
-              <div className="min-w-0">
-                <h2 className="panel-title">
-                  <Icon name="clock" size={15} />
-                  Recent investigations
-                </h2>
-                <p className="panel-note">
-                  RDAP lookups recorded on this instance, newest first
-                </p>
-              </div>
-              <Link href="/scanner" className="btn btn-ghost btn-sm">
+      <div className="grid min-w-0 gap-5 lg:grid-cols-3">
+        <div className="min-w-0 lg:col-span-2">
+          <Panel
+            title="Recent investigations"
+            note="RDAP sessions recorded on this instance, newest first"
+            icon="clock"
+            actions={
+              <Link href="/scanner" className="btn btn-quiet btn-sm">
                 New lookup
               </Link>
-            </div>
-
+            }
+          >
             {recentSessions.length === 0 ? (
               <div className="empty">
                 <div className="empty-icon">
-                  <Icon name="investigate" size={20} />
+                  <Icon name="investigate" size={21} />
                 </div>
-                <p className="text-[13.5px] font-medium text-[var(--color-ink)]">
+                <p className="text-[14px] font-semibold text-[var(--color-ink)]">
                   No investigations recorded
                 </p>
-                <p className="max-w-sm text-[12px] leading-relaxed text-[var(--color-ink-3)]">
-                  Run a live lookup above and it will appear here with its
+                <p className="mt-1.5 max-w-[42ch] text-[12.5px] leading-relaxed text-[var(--color-ink-3)]">
+                  Run a live lookup above and it will appear here with its full
                   evidence trail.
                 </p>
               </div>
@@ -170,7 +207,7 @@ async function ConsoleData() {
                   <li key={s.id}>
                     <Link
                       href={`/scanner?name=${encodeURIComponent(s.normalizedSld)}`}
-                      className="group flex items-center gap-3 border-b border-[var(--color-line)] px-4 py-3 transition-colors last:border-0 hover:bg-[var(--color-bg-2)]"
+                      className="group flex items-center gap-3 border-b border-[var(--color-line)] px-4 py-3 transition-colors last:border-0 hover:bg-[var(--color-surface-2)]"
                     >
                       <span
                         className="dot shrink-0"
@@ -184,16 +221,16 @@ async function ConsoleData() {
                         }}
                         aria-hidden
                       />
-                      <span className="mono min-w-0 flex-1 truncate text-[13.5px] text-[var(--color-ink)]">
+                      <span className="dd min-w-0 flex-1 truncate">
                         {s.normalizedSld}
                       </span>
-                      <span className="micro hidden whitespace-nowrap md:inline">
-                        <span className="tnum text-[var(--color-ink-2)]">
+                      <span className="micro hidden whitespace-nowrap tabular-nums md:inline">
+                        <span className="text-[var(--color-ink-2)]">
                           {s.registeredCount}
                         </span>{" "}
                         registered
-                        <span className="mx-1.5 text-[var(--color-ink-4)]">·</span>
-                        <span className="tnum text-[var(--color-ink-2)]">
+                        <span className="mx-1.5 text-[var(--color-line-3)]">·</span>
+                        <span className="text-[var(--color-ink-2)]">
                           {s.checkedCount}
                         </span>{" "}
                         checked
@@ -210,7 +247,7 @@ async function ConsoleData() {
                       >
                         {s.status === "COMPLETED" ? "complete" : s.status.toLowerCase()}
                       </Badge>
-                      <span className="faint whitespace-nowrap text-[11px]">
+                      <span className="hidden shrink-0 whitespace-nowrap text-[11px] text-[var(--color-ink-3)] sm:inline">
                         {formatWhen(s.completedAt ?? s.startedAt)}
                       </span>
                       <Icon
@@ -223,29 +260,31 @@ async function ConsoleData() {
                 ))}
               </ul>
             )}
-          </section>
+          </Panel>
         </div>
 
-        <div className="min-w-0 space-y-6 lg:col-span-2">
+        <div className="min-w-0 space-y-5">
           <Panel
-            title="Availability mix"
-            note="Normalized status across every registry check"
+            title="Registry states"
+            note="Normalized across every check"
             icon="registry"
             flush={false}
           >
             {statusRows.length === 0 ? (
-              <p className="text-[12.5px] text-[var(--color-ink-3)]">
+              <p className="text-[13px] text-[var(--color-ink-3)]">
                 No registry checks recorded yet.
               </p>
             ) : (
               <ul className="space-y-3.5">
                 {statusRows.map((row) => (
                   <li key={row.status}>
-                    <div className="mb-1.5 flex items-baseline justify-between text-[12px]">
+                    <div className="mb-1.5 flex items-baseline justify-between text-[12.5px]">
                       <span className="text-[var(--color-ink-2)]">
                         {STATUS_LABEL[row.status] ?? row.status}
                       </span>
-                      <span className="mono text-[var(--color-ink)]">{row.count}</span>
+                      <span className="mono font-medium text-[var(--color-ink)]">
+                        {row.count}
+                      </span>
                     </div>
                     <Bar
                       value={row.count}
@@ -257,8 +296,8 @@ async function ConsoleData() {
               </ul>
             )}
             <Note>
-              * &ldquo;No record&rdquo; means RDAP returned nothing for that name — it is
-              not proof the domain is available to register.
+              * “No record” means RDAP returned nothing for that name — it is not
+              proof the domain is available to register.
             </Note>
           </Panel>
 
@@ -272,29 +311,31 @@ async function ConsoleData() {
             }
           >
             {candCounts.byTld.length === 0 ? (
-              <div className="px-5 py-6 text-[12.5px] text-[var(--color-ink-3)]">
+              <div className="px-5 py-6 text-[13px] text-[var(--color-ink-3)]">
                 No candidates stored yet.
               </div>
             ) : (
-              <table className="grid-table">
-                <thead>
-                  <tr>
-                    <th>Extension</th>
-                    <th className="num">Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {candCounts.byTld
-                    .slice()
-                    .sort((a, b) => b.count - a.count)
-                    .map((row) => (
-                      <tr key={row.tld}>
-                        <td className="mono primary">.{row.tld}</td>
-                        <td className="num">{row.count}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+              <div className="grid-wrap">
+                <table className="grid-table">
+                  <thead>
+                    <tr>
+                      <th>Extension</th>
+                      <th className="num">Candidates</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {candCounts.byTld
+                      .slice()
+                      .sort((a, b) => b.count - a.count)
+                      .map((row) => (
+                        <tr key={row.tld}>
+                          <td className="mono primary">.{row.tld}</td>
+                          <td className="num">{row.count}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </Panel>
         </div>

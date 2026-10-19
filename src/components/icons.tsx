@@ -111,7 +111,7 @@ export function BrandMark({ size = 28 }: { size?: number }) {
         width="31"
         height="31"
         rx="9"
-        fill="var(--color-panel-2)"
+        fill="var(--color-surface-2)"
         stroke="var(--color-line-3)"
       />
       <g stroke="var(--color-accent)" strokeWidth="1.5" fill="none" opacity="0.55">
