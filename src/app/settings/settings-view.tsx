@@ -212,17 +212,19 @@ export function SettingsView() {
             />
             <div>
               <label className="field-label" htmlFor="fx">
-                FX rate source
+                FX rate source <span className="text-[var(--color-ink-4)]">· reserved</span>
               </label>
               <input
                 id="fx"
                 value={settings.fxRateSource}
-                onChange={(e) =>
-                  setSettings({ ...settings, fxRateSource: e.target.value })
-                }
-                className="input"
+                readOnly
+                disabled
+                className="input opacity-60"
               />
-              <p className="micro mt-1.5">Used when a valuation is normalised.</p>
+              <p className="micro mt-1.5">
+                Stored only. No valuation or currency conversion runs yet, so this
+                value is not consumed by any feature.
+              </p>
             </div>
           </div>
         </Panel>

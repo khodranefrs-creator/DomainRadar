@@ -8,7 +8,8 @@ import { Badge, availabilityTone } from "@/components/badge";
 import { Icon } from "@/components/icons";
 import { Bar, Note, Panel, StatLine } from "@/components/ui";
 import { InvestigateLauncher } from "@/components/investigate-launcher";
-import { TldStatus, SourceStatus } from "@/lib/enums";
+import { jobRepository } from "@/lib/jobs/repository";
+import { TldStatus, SourceStatus, ResearchJobStatus } from "@/lib/enums";
 
 export const metadata: Metadata = {
   title: "Console",
@@ -37,6 +38,16 @@ export default function ConsolePage() {
 
               <div className="mt-6">
                 <InvestigateLauncher />
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Link href="/bulk" className="btn btn-quiet btn-sm">
+                  <Icon name="layers" size={15} />
+                  Scan in bulk
+                </Link>
+                <span className="micro">
+                  Paste or upload a list · durable jobs · exportable evidence
+                </span>
               </div>
             </div>
 
@@ -121,6 +132,7 @@ async function ConsoleData() {
     totalChecks,
     recentSessions,
     lastCheck,
+    recentJobs,
   ] = await Promise.all([
     candidateRepository.counts(),
     tldRepository.countByStatus(),
@@ -138,6 +150,7 @@ async function ConsoleData() {
       orderBy: { checkedAt: "desc" },
       select: { checkedAt: true },
     }),
+    jobRepository.list(5),
   ]);
 
   const availableTlds =
@@ -340,6 +353,108 @@ async function ConsoleData() {
           </Panel>
         </div>
       </div>
+
+      <Panel
+        title="Bulk scans"
+        note="Durable jobs · each runs against the same verified RDAP endpoints"
+        icon="layers"
+        actions={
+          <Link href="/bulk" className="btn btn-quiet btn-sm">
+            Open bulk scan
+          </Link>
+        }
+      >
+        {recentJobs.length === 0 ? (
+          <div className="empty">
+            <div className="empty-icon">
+              <Icon name="layers" size={21} />
+            </div>
+            <p className="text-[14px] font-semibold text-[var(--color-ink)]">
+              No bulk scans yet
+            </p>
+            <p className="mt-1.5 max-w-[46ch] text-[12.5px] leading-relaxed text-[var(--color-ink-3)]">
+              Paste a list or upload a CSV and Domain Radar will check each name
+              in the background, persist the evidence, and let you export it.
+            </p>
+          </div>
+        ) : (
+          <ul>
+            {recentJobs.map((job) => {
+              const settled =
+                job.doneCount + job.failedCount + job.skippedCount;
+              return (
+                <li key={job.id}>
+                  <Link
+                    href="/bulk"
+                    className="group flex items-center gap-3 border-b border-[var(--color-line)] px-4 py-3 transition-colors last:border-0 hover:bg-[var(--color-surface-2)]"
+                  >
+                    <span
+                      className="dot shrink-0"
+                      style={{
+                        background:
+                          job.status === ResearchJobStatus.COMPLETED
+                            ? "var(--color-ok)"
+                            : job.status === ResearchJobStatus.FAILED
+                              ? "var(--color-bad)"
+                              : job.status === ResearchJobStatus.CANCELLED
+                                ? "var(--color-unknown)"
+                                : "var(--color-warn)",
+                      }}
+                      aria-hidden
+                    />
+                    <span className="dd min-w-0 flex-1 truncate">
+                      {job.sourceLabel ?? `${job.totalItems} names`}
+                    </span>
+                    <span className="micro hidden whitespace-nowrap tabular-nums md:inline">
+                      <span className="text-[var(--color-ink-2)]">
+                        {settled}
+                      </span>
+                      /{job.totalItems} settled
+                      <span className="mx-1.5 text-[var(--color-line-3)]">·</span>
+                      <span className="text-[var(--color-ink-2)]">
+                        {job.doneCount}
+                      </span>{" "}
+                      done
+                      {job.skippedCount > 0 ? (
+                        <>
+                          <span className="mx-1.5 text-[var(--color-line-3)]">
+                            ·
+                          </span>
+                          {job.skippedCount} skipped
+                        </>
+                      ) : null}
+                    </span>
+                    <Badge dot tone={jobTone(job.status)}>
+                      {job.status.toLowerCase()}
+                    </Badge>
+                    <span className="hidden shrink-0 whitespace-nowrap text-[11px] text-[var(--color-ink-3)] sm:inline">
+                      {formatWhen(job.finishedAt ?? job.createdAt)}
+                    </span>
+                    <Icon
+                      name="chevron"
+                      size={15}
+                      className="shrink-0 text-[var(--color-ink-4)] transition-colors group-hover:text-[var(--color-ink-2)]"
+                    />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Panel>
     </div>
   );
+}
+
+function jobTone(status: string): "good" | "bad" | "warn" | "neutral" {
+  switch (status) {
+    case ResearchJobStatus.COMPLETED:
+      return "good";
+    case ResearchJobStatus.FAILED:
+      return "bad";
+    case ResearchJobStatus.CANCELLED:
+      return "neutral";
+    default:
+      return "warn";
+  }
 }

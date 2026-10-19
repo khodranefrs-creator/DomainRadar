@@ -85,6 +85,9 @@ export const RATE_LIMITS = {
   candidatesImport: { windowMs: 60_000, max: 5 },
   candidatesWrite: { windowMs: 60_000, max: 60 },
   settingsWrite: { windowMs: 60_000, max: 20 },
+  jobsCreate: { windowMs: 60_000, max: 30 },
+  // A step performs outbound registry lookups, so it is capped like a search.
+  jobsStep: { windowMs: 60_000, max: 600 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitBucket = keyof typeof RATE_LIMITS;

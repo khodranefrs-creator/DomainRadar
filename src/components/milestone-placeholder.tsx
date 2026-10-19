@@ -5,6 +5,7 @@ import { Callout, Note, PageHeader } from "@/components/ui";
 
 const DEFAULT_LINKS: { href: string; label: string; icon: string }[] = [
   { href: "/scanner", label: "Investigate a domain", icon: "investigate" },
+  { href: "/bulk", label: "Run a bulk scan", icon: "layers" },
   { href: "/candidates", label: "Review the pipeline", icon: "pipeline" },
   { href: "/sources", label: "Check sources & extensions", icon: "registry" },
 ];

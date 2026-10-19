@@ -19,6 +19,7 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/", label: "Console", icon: "console", hint: "Launch & overview" },
       { href: "/scanner", label: "Investigate", icon: "investigate", hint: "Live RDAP lookup" },
+      { href: "/bulk", label: "Bulk scan", icon: "layers", hint: "Durable batch jobs" },
       { href: "/candidates", label: "Pipeline", icon: "pipeline", hint: "Candidate domains" },
       { href: "/experiments", label: "Experiments", icon: "experiments", note: "M7" },
     ],
@@ -47,9 +48,14 @@ const ALL: NavItem[] = GROUPS.flatMap((g) => g.items);
 const TABS: { href: string; label: string; icon: string }[] = [
   { href: "/", label: "Console", icon: "console" },
   { href: "/scanner", label: "Investigate", icon: "investigate" },
+  { href: "/bulk", label: "Bulk", icon: "layers" },
   { href: "/candidates", label: "Pipeline", icon: "pipeline" },
   { href: "/sources", label: "Registry", icon: "registry" },
 ];
+
+// Mobile bottom bar keeps four primary destinations; everything else lives in
+// the "More" sheet. Registry is desktop-only in the primary bar.
+const MOBILE_TABS = TABS.filter((t) => t.href !== "/sources");
 
 function matchRoute(pathname: string) {
   if (pathname === "/") return { item: ALL[0], group: "Research" };
@@ -418,7 +424,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
       ) : null}
 
       <nav className="tabbar" aria-label="Sections">
-        {TABS.map((t) => (
+        {MOBILE_TABS.map((t) => (
           <Link key={t.href} href={t.href} data-active={pathname === t.href} className="tab">
             <Icon name={t.icon} size={19} />
             {t.label}

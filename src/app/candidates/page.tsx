@@ -40,6 +40,7 @@ export default function CandidatesPage() {
   const [selected, setSelected] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<string | null>(null);
+  const [importErrors, setImportErrors] = useState<{ row: number; reason: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showImport, setShowImport] = useState(false);
@@ -86,6 +87,7 @@ export default function CandidatesPage() {
     const file = fileRef.current?.files?.[0];
     if (!file) return;
     setImportResult(null);
+    setImportErrors([]);
     setError(null);
     const body = new FormData();
     body.set("file", file);
@@ -95,9 +97,16 @@ export default function CandidatesPage() {
       if (!res.ok) {
         setError(data.error ?? "Import failed");
       } else {
-        setImportResult(
-          `Imported ${data.imported} · ${data.skipped ?? 0} skipped · ${data.total ?? 0} stored`,
-        );
+        const r = data.result ?? {};
+        const imported = r.importedRows ?? 0;
+        const errorRows = r.errorRows ?? 0;
+        const parts = [
+          `Imported ${imported} of ${r.totalRows ?? 0} rows`,
+          `${r.skippedRows ?? 0} blank skipped`,
+        ];
+        if (errorRows > 0) parts.push(`${errorRows} rejected`);
+        setImportResult(`${parts.join(" · ")}.`);
+        setImportErrors(Array.isArray(r.errors) ? r.errors : []);
         if (fileRef.current) fileRef.current.value = "";
         const refreshed = await fetchCandidates();
         setItems(refreshed.items ?? []);
@@ -213,9 +222,23 @@ export default function CandidatesPage() {
       ) : null}
 
       {importResult ? (
-        <div className="mb-5 flex items-center gap-2 rounded-[11px] border border-[color-mix(in_srgb,var(--color-ok)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-ok)_8%,transparent)] px-4 py-3 text-[12.5px] text-[var(--color-ok)]">
-          <Icon name="check" size={14} />
-          {importResult}
+        <div className="mb-5 rounded-[11px] border border-[color-mix(in_srgb,var(--color-ok)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-ok)_8%,transparent)] px-4 py-3 text-[12.5px] text-[var(--color-ink-2)]">
+          <div className="flex items-center gap-2 font-medium text-[var(--color-ok)]">
+            <Icon name="check" size={14} />
+            {importResult}
+          </div>
+          {importErrors.length > 0 ? (
+            <ul className="mt-2 space-y-0.5 border-t border-[var(--color-line)] pt-2 text-[11.5px] text-[var(--color-ink-3)]">
+              {importErrors.slice(0, 8).map((e) => (
+                <li key={e.row} className="mono">
+                  row {e.row}: {e.reason}
+                </li>
+              ))}
+              {importErrors.length > 8 ? (
+                <li className="mono">…and {importErrors.length - 8} more</li>
+              ) : null}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 

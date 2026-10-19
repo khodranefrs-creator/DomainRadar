@@ -57,6 +57,7 @@ export async function POST(request: Request) {
   const deps = createDefaultSearchDeps({
     defaultMinIntervalMs: Math.max(250, settings.requestDelayMs),
     maxConcurrency: settings.maxConcurrency,
+    requestBudgetPerRun: settings.requestBudgetPerRun,
   });
 
   let summary;

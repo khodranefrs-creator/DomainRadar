@@ -97,6 +97,8 @@ export interface SearchDeps {
   delay: Sleeper;
   defaultMinIntervalMs: number;
   maxConcurrency: number;
+  /** Hard cap on outbound registry lookups in a single run. 0 = unlimited. */
+  requestBudgetPerRun: number;
   loadTlds: (tlds: string[]) => Promise<TldInfo[]>;
   loadBootstrapMap: () => Promise<BootstrapMap | null>;
   ensureSource: (host: string) => Promise<SourceInfo>;
@@ -455,7 +457,20 @@ export async function runSearch(
   }
 
   const limiters = new Map<string, RateLimiter>();
+  const budget = deps.requestBudgetPerRun;
+  let attempts = 0;
   await pool(jobs, deps.maxConcurrency, async (job) => {
+    if (budget > 0 && attempts >= budget) {
+      results[job.index] = enumerationVariant(
+        job.tld,
+        job.fqdn,
+        AvailabilityStatus.RATE_LIMITED,
+        job.row.registryName,
+        `Request budget for this run (${budget}) was reached before this lookup; it was not attempted.`,
+      );
+      return;
+    }
+    attempts++;
     results[job.index] = await checkAvailableVariant(job, session.id, deps, limiters);
   });
 
@@ -498,6 +513,7 @@ function toSourceInfo(row: {
 export interface DefaultDepsOptions {
   defaultMinIntervalMs?: number;
   maxConcurrency?: number;
+  requestBudgetPerRun?: number;
   now?: () => number;
   delay?: Sleeper;
 }
@@ -510,6 +526,7 @@ export function createDefaultSearchDeps(
     delay: options.delay ?? defaultDelay,
     defaultMinIntervalMs: options.defaultMinIntervalMs ?? 1000,
     maxConcurrency: options.maxConcurrency ?? 2,
+    requestBudgetPerRun: options.requestBudgetPerRun ?? 0,
 
     loadTlds: async (tlds) =>
       prisma.tldRegistry.findMany({ where: { tld: { in: tlds } } }),

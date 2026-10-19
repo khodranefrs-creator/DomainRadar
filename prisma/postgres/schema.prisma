@@ -151,6 +151,88 @@ model DomainVariantCheck {
 }
 
 // ---------------------------------------------------------------------------
+// Durable bulk research jobs
+// ---------------------------------------------------------------------------
+
+/// A durable, resumable bulk investigation of many labels across many TLDs.
+///
+/// IMPORTANT (serverless reality): on Vercel a process may be frozen the moment
+/// the HTTP response is returned, so there is NO background worker. A job is
+/// advanced by repeated, bounded `POST /api/jobs/[id]/step` calls (driven by the
+/// client). Because every item's state is persisted, a job can be stopped and
+/// later resumed exactly where it left off. This is the honest alternative to
+/// promising detached background processing the platform cannot guarantee.
+///
+/// Concurrent step calls are serialized with `leaseOwner`/`leaseExpiresAt`: a
+/// step claims the job for a short lease; a stale lease can be reclaimed, so an
+/// interrupted step never wedges the job forever.
+model ResearchJob {
+  id           String   @id @default(cuid())
+  kind         String   @default("BULK_AVAILABILITY") // see enums.ResearchJobKind
+  status       String   @default("PENDING") // see enums.ResearchJobStatus
+  rawInput     String // exactly what the user pasted/imported (bounded)
+  sourceLabel  String? // "paste" | filename | "single"
+  requestedTlds String // JSON array of requested TLD strings (order preserved)
+
+  totalItems   Int      @default(0)
+  pendingCount Int      @default(0)
+  runningCount Int      @default(0)
+  doneCount    Int      @default(0)
+  failedCount  Int      @default(0)
+  skippedCount Int      @default(0)
+
+  maxItems     Int      @default(3000) // hard product limit recorded per job
+  maxTlds      Int      @default(20)
+
+  // step concurrency leasing (see comment above)
+  leaseOwner     String?
+  leaseExpiresAt DateTime?
+
+  lastError    String?
+  startedAt    DateTime @default(now())
+  finishedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  items ResearchJobItem[]
+
+  @@index([status, updatedAt])
+  @@index([createdAt])
+}
+
+/// One (label, TLD) unit of work inside a ResearchJob. Status transitions are
+/// PENDING -> RUNNING -> DONE | FAILED | SKIPPED. A FAILED item that is retryable
+/// can be moved back to PENDING by a retry action; `attempts` is preserved.
+model ResearchJobItem {
+  id        String   @id @default(cuid())
+  jobId     String
+  job       ResearchJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  sld       String
+  tld       String
+  fqdn      String
+  status    String   @default("PENDING") // see enums.ResearchJobItemStatus
+  attempts  Int      @default(0)
+
+  // result mirror of a DomainVariantCheck (null until resolved)
+  normalizedStatus String?
+  httpStatus       Int?
+  providerHost     String?
+  requestUrl       String?
+  errorKind        String?
+  errorDetails     String?
+  responseMs       Int?
+  isFresh          Boolean  @default(false)
+  checkedAt        DateTime?
+
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jobId, fqdn])
+  @@index([jobId, status])
+}
+
+// ---------------------------------------------------------------------------
 // Candidates & availability
 // ---------------------------------------------------------------------------
 

@@ -67,6 +67,35 @@ export const SessionStatus = {
 } as const;
 export type SessionStatus = (typeof SessionStatus)[keyof typeof SessionStatus];
 
+// Durable bulk research jobs. See prisma/schema.prisma ResearchJob for why the
+// job is stepped rather than run by a detached worker on serverless hosting.
+export const ResearchJobKind = {
+  BULK_AVAILABILITY: "BULK_AVAILABILITY",
+} as const;
+export type ResearchJobKind =
+  (typeof ResearchJobKind)[keyof typeof ResearchJobKind];
+
+export const ResearchJobStatus = {
+  PENDING: "PENDING", // created, no step has run yet
+  RUNNING: "RUNNING", // at least one step claimed and is advancing items
+  PAUSED: "PAUSED", // user stopped advancing; fully resumable
+  CANCELLED: "CANCELLED", // user cancelled; pending items will not run
+  COMPLETED: "COMPLETED", // every item reached a terminal state
+  FAILED: "FAILED", // job-level failure (not per-item)
+} as const;
+export type ResearchJobStatus =
+  (typeof ResearchJobStatus)[keyof typeof ResearchJobStatus];
+
+export const ResearchJobItemStatus = {
+  PENDING: "PENDING",
+  RUNNING: "RUNNING",
+  DONE: "DONE", // resolved to a definite normalized status
+  FAILED: "FAILED", // errored; may be retryable
+  SKIPPED: "SKIPPED", // not attempted on purpose (unsupported/disabled/unknown)
+} as const;
+export type ResearchJobItemStatus =
+  (typeof ResearchJobItemStatus)[keyof typeof ResearchJobItemStatus];
+
 export const CandidateStatus = {
   CANDIDATE: "CANDIDATE",
   SHORTLISTED: "SHORTLISTED",

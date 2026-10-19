@@ -72,6 +72,7 @@ function makeDeps(opts: {
     delay: async () => {},
     defaultMinIntervalMs: 0,
     maxConcurrency: 3,
+    requestBudgetPerRun: 0,
     loadTlds: async (requested) => TLDS.filter((t) => requested.includes(t.tld)),
     loadBootstrapMap: async () => BOOTSTRAP,
     ensureSource: async (host) => ({
